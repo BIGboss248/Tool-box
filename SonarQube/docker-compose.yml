@@ -1,0 +1,21 @@
+services:
+  sonarqube:
+    image: sonarqube:10.6-community
+    container_name: sonarqube
+    hostname: sonarqube
+    # ports:
+      # - 9000:9000
+    networks:
+      - my_network
+    volumes:
+      - sonar_data:/opt/sonarqube/data:rw
+      - sonar_logs:/opt/sonarqube/logs:rw
+      - sonar_extensions:/opt/sonarqube/extensions:rw
+networks:
+  my_network:
+    driver: bridge
+    name: my_network
+volumes:
+  sonar_logs:
+  sonar_data:
+  sonar_extensions:
