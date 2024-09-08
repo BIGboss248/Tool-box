@@ -2,6 +2,11 @@ FROM pagespeed/nginx-pagespeed
 # use image below instead if you need power of Lua in your Nginx
 # FROM romanmelnyk/ngxpagespeed-lua
 
+RUN addgroup -S nonroot \
+    && adduser -S nonroot -G nonroot
+
+USER nonroot
+
 # Install curl
 RUN apk add --no-cache curl
 
@@ -9,7 +14,7 @@ RUN apk add --no-cache curl
 RUN mkdir /usr/local/sbin
 
 # Step 1
-RUN wget https://raw.githubusercontent.com/mitchellkrogza/nginx-ultimate-bad-bot-blocker/master/install-ngxblocker -O /usr/local/sbin/install-ngxblocker
+RUN wget --max-redirect=0 https://raw.githubusercontent.com/mitchellkrogza/nginx-ultimate-bad-bot-blocker/master/install-ngxblocker -O /usr/local/sbin/install-ngxblocker
 RUN chmod +x /usr/local/sbin/install-ngxblocker
 
 # Step 2 - Skipped since it's a DRY run
