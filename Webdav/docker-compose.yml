@@ -1,6 +1,8 @@
 services:
   webdav:
     image: bytemark/webdav
+    hostname: webdav
+    container_name: webdav
     restart: always
     ports:
       - :80
@@ -8,3 +10,9 @@ services:
       - .env
     volumes:
       - /karing:/var/lib/dav
+    networks:
+      - my_network
+networks:
+  my_network:
+    driver: bridge
+    name: my_network
