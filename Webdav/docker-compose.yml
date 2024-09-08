@@ -1,0 +1,10 @@
+services:
+  webdav:
+    image: bytemark/webdav
+    restart: always
+    ports:
+      - :80
+    env_file:
+      - .env
+    volumes:
+      - /karing:/var/lib/dav

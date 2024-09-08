@@ -1,0 +1,10 @@
+services:
+  xray:
+    image: ghcr.io/xtls/xray-core:latest
+    ports:
+      - "10808:10808"
+    container_name: xray
+    hostname: xray
+    restart: unless-stopped
+    volumes:
+      - ./:/etc/xray

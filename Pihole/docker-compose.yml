@@ -1,0 +1,27 @@
+services:
+  pihole:
+    image: pihole/pihole:latest
+    container_name: pihole
+    hostname: pihole
+    restart: unless-stopped
+    ports:
+      - 53:53/tcp
+      - 53:53/udp
+      - :80
+    environment:
+      TZ: America/Chicago
+      DNS1: 127.0.0.1
+      DNS2: 1.1.1.1
+      DNSMASQ_LISTENING: all
+      VIRTUAL_HOST: pihole
+      PROXY_LOCATION: pihole
+      FTLCONF_LOCAL_IPV4: 127.0.0.1
+    volumes:
+      - ./pihole-pihole:/etc/pihole
+      - ./dnsmasq.d:/etc/dnsmasq.d
+    networks:
+      - my_network
+
+networks:
+  my_network:
+    driver: bridge

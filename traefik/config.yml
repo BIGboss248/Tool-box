@@ -1,0 +1,14 @@
+# tcp:
+#   routers:
+#     Router:
+#       rule: HostSNI(`*`)
+#       entryPoints:
+#         - xui
+#       # By default, routers listen to every entrypoints
+#       service: x-ui-service
+
+#   services:
+#     x-ui-service:
+#       loadBalancer:
+#         servers:
+#           - address: x-ui:54321

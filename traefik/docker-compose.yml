@@ -1,0 +1,47 @@
+services:
+  traefik:
+    # The official v3 Traefik docker image
+    image: traefik
+    # Enables the web UI and tells Traefik to listen to docker
+    command: --api.insecure=true --providers.docker
+    container_name: traefik
+    hostname: traefik
+    ports:
+      # The HTTP port
+      - "80:80"
+      # The Web UI (enabled by --api.insecure=true)
+      - :8080
+      # The HTTPS port
+      - "443:443"
+    environment:
+      # CF_DNS_API_TOKEN_FILE: /run/secrets/cf_api_token # note using _FILE for docker secrets
+      Domain: ${Domain}
+      CLOUDFLARE_API_KEY: ${cf_api_token}
+      CLOUDFLARE_EMAIL: ${cf_email}
+    env_file: .env # use .env
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/traefik.yml:ro
+      - ./acme.json:/acme.json:rw
+      # - ./data/config.yml:/config.yml:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.entrypoints=web"
+      - "traefik.http.routers.traefik.rule=Host(`${Domain}`)"
+      - "traefik.http.routers.traefik-secure.tls=true"
+      - "traefik.http.routers.traefik-secure.entrypoints=websecure"
+      - "traefik.http.routers.traefik-secure.rule=Host(`${Domain}`)"
+      - "traefik.http.routers.traefik-secure.tls.certresolver=myresolver"
+      # To enable dns challenge and wild card certificate comment above and uncommect below
+      # - "traefik.http.routers.traefik-secure.tls.certresolver=cloudflare"
+      # - "traefik.http.routers.traefik-secure.tls.domains[0].sans=*.${Domain}"
+      - "traefik.http.routers.traefik-secure.tls.domains[0].main=${Domain}"
+      - "traefik.http.routers.traefik-secure.service=api@internal"
+    networks:
+      - my_network
+
+networks:
+  my_network:
+    driver: bridge
+    name: my_network

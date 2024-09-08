@@ -1,0 +1,28 @@
+services:
+  registry:
+    image: registry:2
+    container_name: registry
+    hostname: registry
+    ports:
+      - :5000
+    environment:
+      - REGISTRY_PROXY_REMOTEURL=https://registry-1.docker.io
+    restart: unless-stopped
+    # volumes:
+    #   - ./registery:/var/lib/registry:rw
+    labels:
+    - "traefik.enable=true"
+    - "traefik.http.services.registery_service.loadbalancer.server.port=5000"
+    - "traefik.http.routers.registery.service=registery_service"
+    - "traefik.http.routers.registery.entrypoints=web"
+    - "traefik.http.routers.registery.rule=Host(`${Domain}`)"
+    - "traefik.http.routers.registery-secure.tls=true"
+    - "traefik.http.routers.registery-secure.entrypoints=websecure"
+    - "traefik.http.routers.registery-secure.rule=Host(`${Domain}`)"
+    - "traefik.http.routers.registery-secure.tls.certresolver=myresolver"
+    networks:
+      - my_network
+networks:
+  my_network:
+    driver: bridge
+    name: my_network

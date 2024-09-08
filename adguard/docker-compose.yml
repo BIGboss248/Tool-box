@@ -1,0 +1,43 @@
+services:
+  adguard:
+    image: adguard/adguardhome
+    hostname: adguard
+    container_name: adguard
+    ports:
+      - :80/tcp
+      - :443/tcp
+      - :443/udp
+      - :3000/tcp
+    volumes:
+      - ./workdir:/opt/adguardhome/work
+      - ./confdir:/opt/adguardhome/conf
+    restart: unless-stopped
+    networks:
+      - my_network
+    labels:
+    # Tell traefik to route this container
+    - "traefik.enable=true"
+    # Define an http service to be routed ENTRYPOINT MUST BE IN STATIC CONFIG
+    - "traefik.http.services.adguard1.loadbalancer.server.port=80"
+    - "traefik.http.routers.adguard1_router.service=adguard1"
+    - "traefik.http.routers.adguard1_router.entrypoints=web"
+    - "traefik.http.routers.adguard1_router.rule=Host(`${Domain}`)"
+    # Define an http service with TLS ENTRYPOINT MUST BE IN STATIC CONFIG
+    - "traefik.http.routers.adguard1_router_secure.tls=true"
+    - "traefik.http.routers.adguard1_router_secure.entrypoints=websecure"
+    - "traefik.http.routers.adguard1_router_secure.rule=Host(`${Domain}`)"
+    - "traefik.http.routers.adguard1_router_secure.tls.certresolver=myresolver"
+    # Define a tcp service with TLS ENTRYPOINT MUST BE IN STATIC CONFIG
+    - "traefik.tcp.services.adguard1_tcp_service.loadbalancer.server.port=443"
+    - "traefik.tcp.routers.adguard1_tcp_router.service=adguard1_tcp_service"
+    - "traefik.tcp.routers.adguard1_tcp_router.entrypoints=websecure"
+    - "traefik.tcp.routers.adguard1_tcp_router.rule=HostSNI(`${Domain_TCP}`)"
+    - "traefik.tcp.routers.adguard1_tcp_router.tls.certresolver=myresolver"
+    # Define a UDP service with TLS ENTRYPOINT MUST BE IN STATIC CONFIG
+    - "traefik.udp.services.adguard1_udp_service.loadbalancer.server.port=443"
+    - "traefik.udp.routers.adguard1_udp_router.service=adguard1_udp_service"
+    - "traefik.udp.routers.adguard1_udp_router.entrypoints=UDP_Entrypoint"
+networks:
+  my_network:
+    driver: bridge
+    name: my_network

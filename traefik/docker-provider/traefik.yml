@@ -1,0 +1,69 @@
+# Define entry points where trafik listens for trafic on
+entryPoints:
+  web:
+    address: ":80"
+
+  websecure:
+    address: ":443"
+  # X-ui proxy service loadbalancer port entry
+  Socks_Proxy:
+    address: ":48620"
+  Socks_Proxy_1:
+    address: ":48721"
+  Socks_Proxy_2:
+    address: ":48722"
+  Socks_Proxy_3:
+    address: ":48723"
+  Socks_Proxy_4:
+    address: ":48724"
+  Socks_Proxy_5:
+    address: ":48725"
+  Socks_Proxy_6:
+    address: ":48726"
+  Socks_Proxy_7:
+    address: ":48727"
+  Socks_Proxy_8:
+    address: ":48728"
+  Socks_Proxy_9:
+    address: ":48729"
+  # DNS_UDP_entry:
+  #   address: ":53/udp"
+  # DNS_TCP_entry:
+  #   address: ":53"
+  Wireguard_Proxy:
+    address: ":48621/udp"
+  Wireguard_Proxy_1:
+    address: ":48622/udp"
+  Wireguard_Proxy_2:
+    address: ":48623/udp"
+  Wireguard_Proxy_3:
+    address: ":48624/udp"
+  Wireguard_Proxy_4:
+    address: ":48625/udp"
+  Wireguard_Proxy_5:
+    address: ":48626/udp"
+
+# Enable dashboard access from port 8080
+metrics:
+  prometheus: {}
+
+api:
+  dashboard: true
+  insecure: true
+
+# Use ./traefik/traefik.yml to load initial configuration
+providers:
+  docker: {}
+
+certificatesResolvers:
+  cloudflare:
+    acme:
+      caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+      email: example@gmail.com #add your email
+      storage: acme.json
+      dnsChallenge:
+        provider: cloudflare
+        #disablePropagationCheck: true # uncomment this if you have issues pulling certificates through cloudflare, By setting this flag to true disables the need to wait for the propagation of the TXT record to all authoritative name servers.
+        resolvers:
+          - "1.1.1.1:53"
+          - "1.0.0.1:53"

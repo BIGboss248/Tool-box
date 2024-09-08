@@ -1,0 +1,16 @@
+services:
+  cloudflared-tunnel:
+    image: cloudflare/cloudflared
+    command: tunnel --url "${DOMAIN}:${PORT}" --edge-ip-version auto --no-autoupdate -protocol http2
+    networks:
+      - my_network
+    container_name: cloudflared-tunnel
+    restart: unless-stopped
+    environment:
+      - DOMAIN
+      - PORT
+
+networks:
+  my_network:
+    driver: bridge
+    name: my_network
