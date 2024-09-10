@@ -1,7 +1,9 @@
+# Default User:admin Default pass:admin
 services:
   grafana:
     image: grafana/grafana-oss
     container_name: grafana
+    hostname: grafana
     restart: unless-stopped
     ports:
       - :3000
