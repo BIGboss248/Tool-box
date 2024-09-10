@@ -1,5 +1,7 @@
 # Tool-box
 
+[![Quality gate](https://sonarqube.newage.rest/api/project_badges/quality_gate?project=BIGboss248_Tool-box_c35a6abf-1688-453c-af4f-ef2185550d6e&token=sqb_4af6a2b13e639389b726eeae8945bdc576752c91)](https://sonarqube.newage.rest/dashboard?id=BIGboss248_Tool-box_c35a6abf-1688-453c-af4f-ef2185550d6e)
+
 ## [Ansible Semaphore](/Ansible%20semaphore/)
 
     #sys_admin #network #automation
