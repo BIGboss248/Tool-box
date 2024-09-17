@@ -27,6 +27,10 @@
 
     #sys_admin
 
+## [Prometheus](/Prometheus)
+
+    #data_visualization #monitoring #sys_admin
+
 ## [adguard](/adguard)
 
     #network #DNS #VPN
