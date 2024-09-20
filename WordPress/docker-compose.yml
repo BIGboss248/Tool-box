@@ -3,6 +3,7 @@ services:
     depends_on:
       - wordpress_db
     container_name: WordPress
+    hostname: wordpress
     image: wordpress
     restart: always
     ports:
