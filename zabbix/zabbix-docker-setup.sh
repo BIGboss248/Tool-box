@@ -6,6 +6,8 @@
 sudo apt update
 sudo git clone https://github.com/zabbix/zabbix-docker.git
 cd zabbix-docker || exit
-git checkout 6.4
-docker compose -f ./docker-compose_v3_ubuntu_pgsql_latest.yaml up -d
+sudo docker compose -f ./docker-compose_v3_alpine_pgsql_latest.yaml up -d
+# Attach contaienr to desired network
+sudo docker network connect my_network zabbix-web-nginx-pgsql
+# The host name is zabbix-web-nginx-pgsql
 # Use: Admin Pass: zabbix
