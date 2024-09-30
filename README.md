@@ -112,3 +112,7 @@
 ## [zerotier](/zerotier)
 
     #network #routing #VPN #VPN_panel
+
+## [Upptime bot](/Upptime%20bot/)
+
+    #network #monitoring #sys_admin

@@ -1,0 +1,37 @@
+
+owner: koj-co # Github username
+repo: upptime # Github password
+
+sites:
+  # Choose the sites you want to monitor
+
+  # Below is a template of what ever you can monitor further down are examples
+
+  # To check https site awailbility
+  - name: "Google"
+    url: https://www.google.com
+
+  # To check based on HTTP method requests
+  - name: POST to Google
+    url: https://www.google.com
+    method: POST
+  - name: DELETE Example
+    url: https://example.com
+    method: DELETE
+
+  # TCP ping a port
+  - name: Google DNS 1
+    check: "tcp-ping"
+    url: 8.8.4.4
+    port: 53
+  - name: Google DNS 2
+    check: "tcp-ping"
+    url: 8.8.8.8
+    port: 53
+
+  # Test ipv6
+  - name: Google DNS
+    check: "tcp-ping"
+    url: dns.google
+    port: 53
+    ipv6: true
