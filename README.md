@@ -116,3 +116,11 @@
 ## [Upptime bot](/Upptime%20bot/)
 
     #network #monitoring #sys_admin
+
+## [Next Cloud](/next_cloud/)
+
+    #sys_admin
+
+## [Iventoy](/iventoy/)
+
+    #sys_admin #automation

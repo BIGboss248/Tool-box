@@ -1,0 +1,25 @@
+services:
+  iventoy:
+    build:
+      args:
+        - IVENTOY=1.0.19
+      context: .
+      dockerfile: Dockerfile
+    container_name: iventoy
+    hostname: iventoy
+    restart: always
+    privileged: true #must be true
+    ports:
+      - 26000:26000
+      - 16000:16000
+      - 10809:10809
+      - 67:67/udp
+      - 69:69/udp
+    volumes:
+      - ./isos:/app/iso
+      - iventoy_config:/app/data
+      - ./log:/app/log
+    environment:
+      - AUTO_START_PXE=true # optional, true by default
+volumes:
+  iventoy_config:
