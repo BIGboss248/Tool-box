@@ -1,6 +1,6 @@
 {
     "sonarlint.connectedMode.project": {
-        "connectionId": "https-sonarqube-newage-rest-",
-        "projectKey": "BIGboss248_Tool-box_139525ec-e6db-402c-b3dc-ccfd452beede"
+        "connectionId": "Sonarqube Community",
+        "projectKey": "BIGboss248_Tool-box_c35a6abf-1688-453c-af4f-ef2185550d6e"
     }
 }
