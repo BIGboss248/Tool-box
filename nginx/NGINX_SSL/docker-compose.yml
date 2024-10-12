@@ -10,7 +10,7 @@ services:
     volumes:
       - ./conf/:/etc/nginx/conf.d/:ro # Nginx conf
       - ./certbot/www:/var/www/certbot/:ro # certbot webroot
-      - ./certbot/letsencrypt/:/etc/nginx/ssl/live/:ro # SSL certs
+      - ./certbot/letsencrypt/:/etc/nginx/ssl/:ro # SSL certs
     networks:
       - my_network
 
