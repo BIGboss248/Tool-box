@@ -1,5 +1,7 @@
 services:
   activepieces:
+    hostname: activepieces
+    container_name: activepieces
     image: activepieces/activepieces:latest
     # ports:
       # - "8080:80"
@@ -9,3 +11,9 @@ services:
       - AP_QUEUE_MODE=MEMORY
       - AP_DB_TYPE=SQLITE3
       - AP_FRONTEND_URL="https:localhost:8080" # it is the public URL where the dashboard can be reached
+    networks:
+      - my_network
+networks:
+  my_network:
+    driver: bridge
+    name: my_network
