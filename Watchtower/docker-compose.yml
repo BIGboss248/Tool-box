@@ -1,0 +1,14 @@
+services:
+  watchtower:
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: always
+    container_name: watchtower
+    hostname: watchtower
+    networks:
+      - my_network
+networks:
+  my_network:
+    driver: bridge
+    name: my_network
