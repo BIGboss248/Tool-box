@@ -1,5 +1,5 @@
 #!/bin/sh
-cd /app
+cd /app || exit
 if $AUTO_START_PXE; then
     ./iventoy.sh -R start
 else
