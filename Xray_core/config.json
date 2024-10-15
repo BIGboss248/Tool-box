@@ -1,5 +1,6 @@
 {
-    "inbounds": [{
+  "inbounds": [
+    {
       "port": 10808,
       "protocol": "vmess",
       "settings": {
@@ -9,9 +10,12 @@
           }
         ]
       }
-    }],
-    "outbounds": [{
+    }
+  ],
+  "outbounds": [
+    {
       "protocol": "freedom",
       "settings": {}
-    }]
-  }
+    }
+  ]
+}

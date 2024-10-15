@@ -7,7 +7,7 @@ We use [free Vps](zrh.cloudsigma.com) to get free vps
 4. Enter the email and subscribe
 5. Use the link in email and create the account
 6. Use one of the three sites below to get a phone number and upgrade the account again
-https://receive-smss.com
+<https://receive-smss.com>
 freesmscenter.com
 7sim.pro
 7. Account is ready

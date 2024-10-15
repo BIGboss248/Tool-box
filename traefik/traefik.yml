@@ -11,7 +11,7 @@ providers:
     endpoint: "unix:///var/run/docker.sock"
     exposedByDefault: false
   # file:
-    # filename: ./config.yml
+  # filename: ./config.yml
 certificatesResolvers:
   myresolver:
     # Enable ACME (Let's Encrypt): automatic SSL.
@@ -25,7 +25,6 @@ certificatesResolvers:
       # Optional
       #
       httpChallenge:
-
         # EntryPoint to use for the HTTP-01 challenges.
         #
         # Required
@@ -88,7 +87,6 @@ certificatesResolvers:
       #
       # tlsChallenge:
 
-
       # Use a DNS-01 ACME challenge rather than HTTP-01 challenge.
       # Note: mandatory for wildcard certificate generation.
       #
@@ -96,36 +94,36 @@ certificatesResolvers:
       #
       # dnsChallenge:
 
-        # DNS provider used.
-        #
-        # Required
-        #
-        # provider: digitalocean
+      # DNS provider used.
+      #
+      # Required
+      #
+      # provider: digitalocean
 
-        # By default, the provider will verify the TXT DNS challenge record before letting ACME verify.
-        # If delayBeforeCheck is greater than zero, this check is delayed for the configured duration in seconds.
-        # Useful if internal networks block external DNS queries.
-        #
-        # Optional
-        # Default: 0
-        #
-        # delayBeforeCheck: 0
+      # By default, the provider will verify the TXT DNS challenge record before letting ACME verify.
+      # If delayBeforeCheck is greater than zero, this check is delayed for the configured duration in seconds.
+      # Useful if internal networks block external DNS queries.
+      #
+      # Optional
+      # Default: 0
+      #
+      # delayBeforeCheck: 0
 
-        # Use following DNS servers to resolve the FQDN authority.
-        #
-        # Optional
-        # Default: empty
-        #
-        # resolvers
-        # - "1.1.1.1:53"
-        # - "8.8.8.8:53"
+      # Use following DNS servers to resolve the FQDN authority.
+      #
+      # Optional
+      # Default: empty
+      #
+      # resolvers
+      # - "1.1.1.1:53"
+      # - "8.8.8.8:53"
 
-        # Disable the DNS propagation checks before notifying ACME that the DNS challenge is ready.
-        #
-        # NOT RECOMMENDED:
-        # Increase the risk of reaching Let's Encrypt's rate limits.
-        #
-        # Optional
-        # Default: false
-        #
-        # disablePropagationCheck: true
+      # Disable the DNS propagation checks before notifying ACME that the DNS challenge is ready.
+      #
+      # NOT RECOMMENDED:
+      # Increase the risk of reaching Let's Encrypt's rate limits.
+      #
+      # Optional
+      # Default: false
+      #
+      # disablePropagationCheck: true

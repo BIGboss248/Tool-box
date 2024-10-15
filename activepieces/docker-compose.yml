@@ -4,7 +4,7 @@ services:
     container_name: activepieces
     image: activepieces/activepieces:latest
     # ports:
-      # - "8080:80"
+    # - "8080:80"
     volumes:
       - ./.activepieces:/root/.activepieces
     environment:

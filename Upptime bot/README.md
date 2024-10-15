@@ -54,8 +54,8 @@ sites:
       # hostname or  ip or https site or github secret containing an ip https site or https with path example
       url: dns.google
       url: 8.8.8.8
-      url: https://google.com
-      url: https://example.com/get-user/3?api_key=$MY_API_KEY
+      url: <https://google.com>
+      url: <https://example.com/get-user/3?api_key=$MY_API_KEY>
 
       # Set request headers under headers as key value pair example"
       headers:
@@ -89,11 +89,11 @@ To add a custom domain to github see [here](https://docs.github.com/en/pages/con
 
 status-website:
   theme: light
-  themeUrl: https://example.com/my-custom-theme.css
+  themeUrl: <https://example.com/my-custom-theme.css>
   #Site title
   name: Upptime
   #Site logo
-  logoUrl: https://example.com/image.jpg
+  logoUrl: <https://example.com/image.jpg>
   #You can set a custom cname
   cname: upptime.js.org # Custom CNAME
   baseUrl: /repo # where "repo" is your repository name if you are not using a CNAME
@@ -101,4 +101,4 @@ status-website:
     - title: Status
       href: /
     - title: GitHub
-      href: https://github.com/$OWNER/$REPO
+      href: <https://github.com/$OWNER/$REPO>
