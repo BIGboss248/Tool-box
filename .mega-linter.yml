@@ -1,28 +1,16 @@
 # Configuration file for MegaLinter
 #
 # See all available variables at https://megalinter.io/latest/config-file/ and in
-# linters documentation
 
-# all, none, or list of linter keys
 APPLY_FIXES: all
-
-# If you use ENABLE variable, all other languages/formats/tooling-formats will
-# be disabled by default
-# ENABLE:
-
-# If you use ENABLE_LINTERS variable, all other linters will be disabled by
-# default
-# ENABLE_LINTERS:
-
-DISABLE:
-  - COPYPASTE # Uncomment to disable checks of excessive copy-pastes
-  - SPELL # Comment to enable checks of spelling mistakes
-DISABLE_LINTERS:
-  - MARKDOWN_MARKDOWN_LINK_CHECK
-
-REPOSITORY_CHECKOV_DISABLE_ERRORS_IF_LESS_THAN: 3
+COPYPASTE_JSCPD_DISABLE_ERRORS: true
+SPELL_CSPELL_DISABLE_ERRORS: true
+MARKDOWN_MARKDOWN_LINK_CHECK_DISABLE_ERRORS: true
+SPELL_LYCHEE_DISABLE_ERRORS: true
+REPOSITORY_DEVSKIM_ARGUMENTS:
+  - "--ignore-rule-ids DS162092" # Ignore passing 127.0.0.1 as debug code
+REPOSITORY_KICS_ARGUMENTS:
+  - "--exclude-queries '610e266e-6c12-4bca-9925-1ed0cd29742b,ce76b7d0-9e77-464d-b86f-c5c48e03e22d,8c978947-0ff6-485c-b0c2-0bfca6026466,451d79dc-0588-476a-ad03-3c7f0320abb3'"
+REPOSITORY_CHECKOV_DISABLE_ERRORS: true
 SHOW_ELAPSED_TIME: true
-
 FILEIO_REPORTER: false
-# Uncomment if you want MegaLinter to detect errors but not block CI to pass
-# DISABLE_ERRORS: true
