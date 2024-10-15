@@ -17,6 +17,8 @@ APPLY_FIXES: all
 DISABLE:
   - COPYPASTE # Uncomment to disable checks of excessive copy-pastes
   - SPELL # Comment to enable checks of spelling mistakes
+DISABLE_LINTERS:
+  - MARKDOWN_MARKDOWN_LINK_CHECK
 
 SHOW_ELAPSED_TIME: true
 
