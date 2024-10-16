@@ -1,0 +1,4 @@
+# To skip a check comment below
+# checkov:skip=<check_id>:<suppression_comment>
+# example:
+#checkov:skip=CKV2_AWS_6
