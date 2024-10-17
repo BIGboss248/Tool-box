@@ -22,4 +22,5 @@ RUN chmod +x /entrypoint.sh
 EXPOSE 26000/tcp
 # HTTP server
 EXPOSE 16000/tcp
+HEALTHCHECK --interval=30s --timeout=30s --start-period=30s --retries=3 CMD [ "./iventoy.sh -R start || exit 1" ]
 CMD [ "/entrypoint.sh" ]
