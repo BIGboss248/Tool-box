@@ -1,4 +1,3 @@
-#checkov:skip=CKV2_GHA_1
 name: Build
 
 on:

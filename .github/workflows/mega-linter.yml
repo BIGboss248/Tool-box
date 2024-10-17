@@ -1,4 +1,3 @@
-#checkov:skip=CKV2_GHA_1
 # MegaLinter GitHub Action configuration file
 # More info at https://megalinter.io
 ---
