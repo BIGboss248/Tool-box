@@ -12,6 +12,12 @@ services:
       - jenkins_volume:/var/jenkins_home
     networks:
       - my_network
+    healthcheck:
+      test: ["CMD","curl", "--fail", "http://localhost:50000"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
 volumes:
   jenkins_volume:
 networks:

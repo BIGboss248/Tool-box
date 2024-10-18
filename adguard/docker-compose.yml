@@ -14,6 +14,12 @@ services:
     restart: unless-stopped
     networks:
       - my_network
+    healthcheck:
+      test: ["CMD", "wget", "--no-check-certificate", "--spider", "--quiet", "https://localhost:443"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     labels:
       # Tell traefik to route this container
       - "traefik.enable=true"
