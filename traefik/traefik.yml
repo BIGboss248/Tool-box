@@ -1,3 +1,4 @@
+ping: {} # Enable health check
 api:
   dashboard: true
   debug: true

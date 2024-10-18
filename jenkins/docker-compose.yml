@@ -13,7 +13,7 @@ services:
     networks:
       - my_network
     healthcheck:
-      test: ["CMD","curl", "--fail", "http://localhost:50000"]
+      test: ["CMD", "curl", "--fail", "http://localhost:50000"]
       interval: 1m30s
       timeout: 30s
       retries: 5

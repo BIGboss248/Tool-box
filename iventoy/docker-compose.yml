@@ -22,5 +22,11 @@ services:
       - ./log:/app/log
     environment:
       - AUTO_START_PXE=true # optional, true by default
+    healthcheck:
+      test: ["CMD", "./iventoy.sh", "-R", "start"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
 volumes:
   iventoy_config:

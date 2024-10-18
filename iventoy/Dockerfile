@@ -1,3 +1,4 @@
+# kics-scan disable=ae5b6871-7f45-42e0-bb4c-ab300c4d2026
 FROM alpine:3.20.3 AS init
 # ENV IVENTOY=1.0.20
 ARG IVENTOY=1.0.20

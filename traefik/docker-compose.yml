@@ -1,3 +1,4 @@
+#kics-scan disable=d6355c88-1e8d-49e9-b2f2-f8a1ca12c75b,1c1325ff-831d-43a1-973e-839ae57dfcc0
 services:
   traefik:
     # The official v3 Traefik docker image
@@ -25,6 +26,12 @@ services:
       - ./traefik.yml:/traefik.yml:ro
       - ./acme.json:/acme.json:rw
       # - ./data/config.yml:/config.yml:ro
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.traefik.entrypoints=web"

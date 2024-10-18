@@ -63,7 +63,15 @@ services:
     networks:
       - my_network
     healthcheck:
-      test: ["CMD", "wget","--no-check-certificate", "--spider", "--quiet", "http://localhost:80"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-check-certificate",
+          "--spider",
+          "--quiet",
+          "http://localhost:80",
+        ]
       interval: 1m30s
       timeout: 30s
       retries: 5

@@ -17,6 +17,12 @@ services:
       - ./WordPress:/var/www/html
     networks:
       - my_network
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:80"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
     labels:
       - "traefik.enable=true"
       #- "traefik.http.services.WordPress_service.loadbalancer.server.port: 80"

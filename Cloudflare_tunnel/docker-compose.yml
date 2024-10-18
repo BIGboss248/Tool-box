@@ -1,3 +1,7 @@
+# Cloudflared download links
+# https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/#linux
+#kics-scan disable=698ed579-b239-4f8f-a388-baa4bcb13ef8
+# kics ignore health ckeck
 services:
   cloudflared-tunnel:
     image: cloudflare/cloudflared
@@ -6,9 +10,8 @@ services:
       - my_network
     container_name: cloudflared-tunnel
     restart: unless-stopped
-    environment:
-      - DOMAIN
-      - PORT
+    env_file:
+      - .env
 
 networks:
   my_network:
