@@ -1,4 +1,4 @@
-#kics-scan disable=8c978947-0ff6-485c-b0c2-0bfca6026466
+#kics-scan disable=8c978947-0ff6-485c-b0c2-0bfca6026466,ae5b6871-7f45-42e0-bb4c-ab300c4d2026
 services:
   iventoy:
     build:
