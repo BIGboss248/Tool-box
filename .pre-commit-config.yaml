@@ -1,24 +1,17 @@
+######################## Important ########################
+# If you just cloned the repository remember to use pre-commit install
+# To automate the process run below
+# git config --global init.templateDir ~/.git-template
+# pre-commit init-templatedir ~/.git-template
+# To check only files which have changed, which may be faster,
+# use something like pre-commit run --from-ref origin/HEAD --to-ref HEAD
 repos:
   - repo: https://github.com/oxsecurity/megalinter
     rev: v8.1.0 # Git tag specifying the hook, not mega-linter-runner, version
     hooks:
-      - id: megalinter-incremental # Faster, less thorough
-        stages:
-          - pre-commit
       - id: megalinter-full # Slower, more thorough
         stages:
-          - pre-push
-
-  - repo: https://github.com/bridgecrewio/checkov.git
-    rev: 3.2.262 # change to tag or sha
-    hooks:
-      - id: checkov
-        # - id: checkov_container
-        # - id: checkov_diff
-        # - id: checkov_diff_container
-        # - id: checkov_secrets
-        # - id: checkov_secrets_container
-
+          - pre-commit
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:

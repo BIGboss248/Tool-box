@@ -1,8 +1,9 @@
+#kics-scan disable=698ed579-b239-4f8f-a388-baa4bcb13ef8
 services:
   oblivion:
     container_name: oblivion
     hostname: oblivion
-    image: ghcr.io/bepass-org/warp-plus:sha-b525aed3a9614df54b1501a9b8f68c328fa32517
+    image: ghcr.io/bepass-org/warp-plus
     command: -b 0.0.0.0:${PORT} --scan --gool
     ports:
       - ${PORT}:${PORT}

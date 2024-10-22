@@ -27,6 +27,13 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     networks:
       - my_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+
   semaphore:
     hostname: semaphore
     container_name: semaphore
