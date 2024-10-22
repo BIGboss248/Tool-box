@@ -10,6 +10,11 @@ services:
       - ./DB:/var/lib/postgresql/data
     networks:
       - my_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   pg_admin:
     image: dpage/pgadmin4
@@ -19,10 +24,16 @@ services:
     ports:
       - :80
     environment:
-      - PGADMIN_DEFAULT_EMAIL=${pg_admin_email}
+      - PGADMIN_DEFAULT_EMAIL=${pg_admin_email} # Email without ""
       - PGADMIN_DEFAULT_PASSWORD=${pg_admin_pass}
     networks:
       - my_network
+    healthcheck:
+      test: ["CMD", "wget","--spider","http://localhost:80"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.postgres.entrypoints=web"

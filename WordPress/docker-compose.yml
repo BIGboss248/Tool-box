@@ -32,6 +32,7 @@ services:
       - "traefik.http.routers.WordPress-secure.entrypoints=websecure"
       - "traefik.http.routers.WordPress-secure.rule=Host(`${WordPress_Domain}`)"
       - "traefik.http.routers.WordPress-secure.tls.certresolver=myresolver"
+
   wordpress_db:
     container_name: wordpress_db
     image: mysql:8.0
@@ -41,6 +42,12 @@ services:
       MYSQL_USER: ${WordPress_db_user}
       MYSQL_PASSWORD: ${WordPress_Pass}
       MYSQL_RANDOM_ROOT_PASSWORD: "1"
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
     volumes:
       - ./WordPress_database:/var/lib/mysql
     networks:

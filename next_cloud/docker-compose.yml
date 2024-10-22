@@ -15,6 +15,12 @@ services:
       - MYSQL_USER=nextcloud
     networks:
       - my_network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   app:
     image: nextcloud
