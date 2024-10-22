@@ -1,0 +1,17 @@
+services:
+  web-check:
+    image: lissy93/web-check
+    ports:
+      - 3000:3000
+    networks:
+      - my_network
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:3000"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+networks:
+  my_network:
+    driver: bridge
+    name: my_network
