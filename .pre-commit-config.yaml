@@ -1,5 +1,6 @@
 ######################## Important ########################
-# If you just cloned the repository remember to use pre-commit install
+# If you just cloned the repository remember to use pre-commit install --hook-type pre-commit
+# To install pre-commit for other kind of hooks be sure to use --hook-type
 # To automate the process run below
 # git config --global init.templateDir ~/.git-template
 # pre-commit init-templatedir ~/.git-template
