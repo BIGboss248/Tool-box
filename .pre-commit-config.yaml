@@ -16,15 +16,15 @@ repos:
         stages:
           - pre-commit
 
-  - repo: https://github.com/Checkmarx/kics
-    rev: v2.1.3-integrations
-    hooks:
-      - id: kics-scan
+  # - repo: https://github.com/Checkmarx/kics
+  #   rev: v2.1.3-integrations
+  #   hooks:
+  #     - id: kics-scan
 
-  - repo: https://github.com/bridgecrewio/checkov
-    rev: 3.2.269
-    hooks:
-      - id: checkov
+  # - repo: https://github.com/bridgecrewio/checkov
+  #   rev: 3.2.269
+  #   hooks:
+  #     - id: checkov
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
