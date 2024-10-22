@@ -21,6 +21,12 @@ services:
       - ./dnsmasq.d:/etc/dnsmasq.d
     networks:
       - my_network
+    healthcheck:
+      test: ["CMD", " dig", "@127.0.0.1", "google.com"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
 
 networks:
   my_network:

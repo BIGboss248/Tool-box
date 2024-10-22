@@ -43,7 +43,7 @@ services:
       MYSQL_PASSWORD: ${WordPress_Pass}
       MYSQL_RANDOM_ROOT_PASSWORD: "1"
     healthcheck:
-      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 1m30s
       timeout: 30s
       retries: 5
