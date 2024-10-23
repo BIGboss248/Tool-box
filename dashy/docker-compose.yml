@@ -1,0 +1,22 @@
+services:
+  dashy:
+    image: lissy93/dashy
+    container_name: dashy
+    restart: always
+    ports:
+      - 8080:8080
+    volumes:
+      # For more info see: https://dashy.to/docs/quick-start#4-configure
+      - ./conf:/app/user-data/:rw
+    networks:
+      - my_network
+    healthcheck:
+      test: ["CMD", "wget","--spider","http://localhost:8080"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+networks:
+  my_network:
+    driver: bridge
+    name: my_network
