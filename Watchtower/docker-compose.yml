@@ -10,6 +10,9 @@ services:
     hostname: watchtower
     networks:
       - my_network
+    environment:
+      # cron scheduling for updating
+      - WATCHTOWER_SCHEDULE="0 0 4 * * *"
 networks:
   my_network:
     driver: bridge
