@@ -1,0 +1,41 @@
+services:
+  nginx_manager:
+    image: "jc21/nginx-proxy-manager:latest"
+    restart: unless-stopped
+    container_name: nginx_manager
+    hostname: nginx_manager
+    ports:
+      # These ports are in format <host-port>:<container-port>
+      - "80:80" # Public HTTP Port
+      - "443:443" # Public HTTPS Port
+      - "81:81" # Admin Web Port
+      # Add any other Stream port you want to expose
+      # - '21:21' # FTP
+
+    # Uncomment the next line if you uncomment anything in the section
+    # environment:
+    # Uncomment this if you want to change the location of
+    # the SQLite DB file within the container
+    # DB_SQLITE_FILE: "/data/database.sqlite"
+
+    # Uncomment this if IPv6 is not enabled on your host
+    # DISABLE_IPV6: 'true'
+
+    volumes:
+      - ./data:/data
+      - ./letsencrypt:/etc/letsencrypt
+
+    healthcheck:
+      test: ["CMD", "/usr/bin/check-health"]
+      interval: 10s
+      timeout: 3s
+
+    networks:
+      - my_network
+    # Default admin user
+    # Email:    admin@example.com
+    # Password: changeme
+networks:
+  my_network:
+    driver: Bridge
+    name: my_network

@@ -127,4 +127,7 @@
 
 ## [ActivePieces](/activepieces/)
 
-    #automaiton #Sysadmin
+    #automaiton #
+
+## [Nginx proxy manager](/nginx%20proxy%20manager)
+    #network #routing #VPN #reverse_proxy
