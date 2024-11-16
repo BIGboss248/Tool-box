@@ -1,0 +1,17 @@
+services:
+  brook:
+    image: teddysun/brook
+    container_name: brook
+    restart: always
+    ports:
+      - "9000:9000"
+      - "9000:9000/udp"
+    environment:
+      - ARGS=server -l :9000 -p password0
+      # - ARGS=wssserver --domainaddress "$BROOK_DOMAIN":443 --password "$BROOK_PASS"
+    healthcheck:
+      test: ["CMD", "/usr/bin/brook", "--version"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
