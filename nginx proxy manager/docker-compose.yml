@@ -34,8 +34,7 @@ services:
     networks:
       - my_network
     # Default admin user
-    # Email:    admin@example.com
-    # Password: changeme
+    # Email:    admin@example.com Pass: changeme
 networks:
   my_network:
     driver: Bridge
