@@ -1,0 +1,17 @@
+services:
+  ssrr:
+    image: teddysun/shadowsocks-r
+    container_name: ssr
+    restart: always
+    ports:
+      - 23456:23456
+      - 23456:23456/udp
+    volumes:
+      - ./:/etc/shadowsocks-r
+    healthcheck:
+      test:
+        ["CMD", "/usr/local/shadowsocks/server.py", "--version", "||", "exit 1"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
