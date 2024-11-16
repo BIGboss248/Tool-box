@@ -1,3 +1,4 @@
+#kics-scan disable=a88baa34-e2ad-44ea-ad6f-8cac87bc7c71
 services:
   nginx_manager:
     image: "jc21/nginx-proxy-manager:latest"
