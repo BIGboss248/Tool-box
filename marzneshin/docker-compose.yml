@@ -1,0 +1,35 @@
+services:
+  marzneshin:
+    # to create an admin inside container run python3
+    # marzneshin-cli.py admin create --sudo
+    image: dawsh/marzneshin:latest
+    restart: always
+    hostname: marzneshin
+    container_name: marzneshin
+    env_file: .env
+    ports:
+      - 8000:8000
+    # network_mode: host
+    environment:
+      SQLALCHEMY_DATABASE_URL: "sqlite:////var/lib/marzneshin/db.sqlite3"
+    volumes:
+      - /var/lib/marzneshin:/var/lib/marzneshin
+
+  marznode:
+    image: dawsh/marznode:latest
+    restart: always
+    hostname: marznode
+    container_name: marznode
+    # network_mode: host
+    ports:
+      - "50000-50050:50000-50050"
+    environment:
+      SERVICE_ADDRESS: "127.0.0.1"
+      INSECURE: "True"
+      XRAY_EXECUTABLE_PATH: "/usr/local/bin/xray"
+      XRAY_ASSETS_PATH: "/usr/local/lib/xray"
+      XRAY_CONFIG_PATH: "/var/lib/marznode/xray_config.json"
+      SSL_KEY_FILE: "./server.key"
+      SSL_CERT_FILE: "./server.cert"
+    volumes:
+      - /var/lib/marznode:/var/lib/marznode
