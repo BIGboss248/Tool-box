@@ -17,6 +17,7 @@ services:
       - ./dashboard-data:/var/lib/marzneshin
 
   marznode:
+    # https://azavaxhuman.github.io/MarzbanInboundGenerator/v2/ To generate xray_config 
     image: dawsh/marznode:latest
     restart: always
     hostname: marznode
