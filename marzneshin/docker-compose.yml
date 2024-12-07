@@ -25,7 +25,7 @@ services:
     ports:
       - "50000-50050:50000-50050"
     environment:
-      SERVICE_ADDRESS: "127.0.0.1"
+      SERVICE_ADDRESS: "0.0.0.0"
       INSECURE: "True"
       XRAY_EXECUTABLE_PATH: "/usr/local/bin/xray"
       XRAY_ASSETS_PATH: "/usr/local/lib/xray"
