@@ -17,7 +17,7 @@ services:
       - ./dashboard-data:/var/lib/marzneshin
 
   marznode:
-    # https://azavaxhuman.github.io/MarzbanInboundGenerator/v2/ To generate xray_config 
+    # https://azavaxhuman.github.io/MarzbanInboundGenerator/v2/ To generate xray_config
     image: dawsh/marznode:latest
     restart: always
     hostname: marznode
@@ -25,6 +25,9 @@ services:
     # network_mode: host
     ports:
       - "50000-50050:50000-50050"
+      - $SERVICE_PORT:$SERVICE_PORT
+    env_file:
+      - .env
     environment:
       SERVICE_ADDRESS: "0.0.0.0"
       INSECURE: "True"
