@@ -131,3 +131,6 @@
 
 ## [Nginx proxy manager](/nginx%20proxy%20manager)
     #network #routing #VPN #reverse_proxy
+
+## [ERP next](/ERP_next/)
+    Open source system for oraganizations
