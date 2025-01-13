@@ -1,0 +1,14 @@
+services:
+  tor:
+    image: dperson/torproxy
+    container_name: tor
+    restart: always
+    ports:
+      - 8118:8118
+      - 9050:9050
+    healthcheck:
+      test: ["CMD", " curl --fail --socks5 127.0.0.1:9050 1.1.1.1"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
