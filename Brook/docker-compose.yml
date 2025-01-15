@@ -7,8 +7,11 @@ services:
       - "9000:9000"
       - "9000:9000/udp"
     environment:
-      - ARGS=server -l :9000 -p password0
+      - ARGS=server -l :9000 -p "$BROOK_PASS"
+      # - ARGS=client --server server_ip:9000 --password "$BROOK_PASS" --socks5 127.0.0.1:1080
+      
       # - ARGS=wssserver --domainaddress "$BROOK_DOMAIN":443 --password "$BROOK_PASS"
+      # - ARGS=wssclient --wssserver wss://domain.com:9999 --password "$BROOK_PASS" --socks5 127.0.0.1:1080
     healthcheck:
       test: ["CMD", "/usr/bin/brook", "--version"]
       interval: 1m30s
