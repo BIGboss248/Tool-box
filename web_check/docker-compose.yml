@@ -1,6 +1,8 @@
 services:
   web-check:
     image: lissy93/web-check
+    container_name: webcheck
+    hostname: webcheck
     ports:
       - 3000:3000
     networks:
