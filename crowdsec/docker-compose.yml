@@ -1,3 +1,4 @@
+#kics-scan disable=610e266e-6c12-4bca-9925-1ed0cd29742b,ce76b7d0-9e77-464d-b86f-c5c48e03e22d,8c978947-0ff6-485c-b0c2-0bfca6026466,d6355c88-1e8d-49e9-b2f2-f8a1ca12c75b
 services:
   traefik:
     #* Don't forget to open ports on firewall for tls certificate
