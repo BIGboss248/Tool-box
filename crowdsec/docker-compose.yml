@@ -5,13 +5,20 @@ services:
     hostname: traefik
     restart: unless-stopped
     command:
-      - "--log.level=DEBUG"
+      # - "--log.level=DEBUG"
       - "--accesslog"
       - "--ping"
       - "--accesslog.filepath=/var/log/traefik/access.log"
       - "--api.insecure=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
+
+      - "--metrics.prometheus=true"
+      - "--metrics.prometheus.addEntryPointsLabels=true"
+      - "--metrics.prometheus.addrouterslabels=true"
+      - "--metrics.prometheus.addServicesLabels=true"
+      - "--entryPoints.metrics.address=:8082"
+      - "--metrics.prometheus.entryPoint=metrics"
 
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
@@ -23,8 +30,7 @@ services:
       - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
 
       - "--experimental.plugins.bouncer.modulename=github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin"
-      - "--experimental.plugins.bouncer.version=v1.4.0"
-
+      - "--experimental.plugins.bouncer.version=v1.3.0"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "./traefik_logs:/var/log/traefik"
@@ -38,6 +44,7 @@ services:
       - 80:80
       - 443:443
       - 8080:8080
+      - 8082:8082 # metrics port /metrics
     depends_on:
       - crowdsec
         # condition: service_healthy
@@ -78,6 +85,23 @@ services:
       start_period: 10s
     networks:
       my_network:
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      my_network:
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 15s
+      retries: 10
+      start_period: 40s
 
 networks:
   my_network:
