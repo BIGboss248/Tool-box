@@ -1,85 +1,83 @@
-#kics-scan disable=610e266e-6c12-4bca-9925-1ed0cd29742b,ce76b7d0-9e77-464d-b86f-c5c48e03e22d,8c978947-0ff6-485c-b0c2-0bfca6026466,d6355c88-1e8d-49e9-b2f2-f8a1ca12c75b
 services:
   traefik:
-    #* Don't forget to open ports on firewall for tls certificate
+    image: traefik
+    container_name: traefik
+    hostname: traefik
     restart: unless-stopped
-    image: traefik:latest
     command:
-      - --providers.docker=true
-      - --accesslog
-      - --accesslog.filepath=/var/log/traefik/access.log
-      - --api.insecure=true
-      - --entrypoints.web.address=:80
-      - --entrypoints.websecure.address=:443
-      - --certificatesresolvers.myresolver.acme.email=youremail@domain.com
-      - --certificatesresolvers.myresolver.acme.caserver=https://acme-v02.api.letsencrypt.org/directory
-      - --certificatesresolvers.myresolver.acme.keytype=RSA4096
-      - --certificatesresolvers.myresolver.acme.tlschallenge=true
-      - --certificatesresolvers.myresolver.acme.httpchallenge=true
-      - --certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web
-      - --certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json
-      - --experimental.plugins.crowdsec-bouncer.modulename=github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin
-      - --experimental.plugins.crowdsec-bouncer.version=v1.2.1
+      - "--log.level=DEBUG"
+      - "--accesslog"
+      - "--ping"
+      - "--accesslog.filepath=/var/log/traefik/access.log"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+
+      - "--certificatesResolvers.myresolver.acme.storage=acme.json"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.myresolver.acme.email=postmaster@example.com"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+
+      - "--experimental.plugins.bouncer.modulename=github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin"
+      - "--experimental.plugins.bouncer.version=v1.4.0"
+
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./traefik_logs:/var/log/traefik"
+      - /etc/localtime:/etc/localtime:ro
+      - ./letsencrypt:/letsencrypt:rw
+      # - ./traefik.yml:/traefik.yml:ro
+      # - './ban.html:/ban.html:ro'
+      # - './captcha.html:/captcha.html:ro'
+      # - ./data/config.yml:/config.yml:ro
     ports:
       - 80:80
       - 443:443
-      # The Web UI (enabled by --api.insecure=true)
       - 8080:8080
     depends_on:
       - crowdsec
-    volumes:
-      - ./letsencrypt:/letsencrypt
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik-logs:/var/log/traefik
-    networks:
-      - my_network
+        # condition: service_healthy
     healthcheck:
       test: ["CMD", "traefik", "healthcheck"]
       interval: 1m30s
       timeout: 30s
       retries: 5
       start_period: 30s
+    networks:
+      my_network:
 
   crowdsec:
-    #* Add aquision for traefik logs
-    # crowdsec/acquis.yml =>
-    # ---
-    # filenames:
-    #   - /var/log/crowdsec/traefik.log
-    # labels:
-    #   type: traefik
-    # ---
-
-    # To get bouncer api key run this command inside crowdsec container
-    #* sudo docker exec crowdsec cscli bouncers add traefik-bouncer
-
-    # Add crowd sec to crowdsec.net dashboard
-    #* sudo docker exec crowdsec cscli console enroll <API key in your dashboard>
-
     image: crowdsecurity/crowdsec
     container_name: crowdsec
-    environment:
-      PGID: "1000"
-      COLLECTIONS: "crowdsecurity/traefik crowdsecurity/http-cve"
-    expose:
-      - "8080"
-    volumes:
-      - ./crowdsec-logs:/var/log/crowdsec:ro
-      - ./crowdsec-data:/var/lib/crowdsec/data
-      - ./crowdsec-auth/auth.log:/var/log/auth.log:ro
-      - ./crowdsec:/etc/crowdsec
-      - ./traefik-logs:/var/log/traefik
+    hostname: crowdsec
     restart: unless-stopped
+    environment:
+      COLLECTIONS: crowdsecurity/traefik crowdsecurity/appsec-virtual-patching crowdsecurity/appsec-generic-rules
+      CUSTOM_HOSTNAME: crowdsec
+      # We need to register one api key per service we will use
+      #* sudo docker exec crowdsec cscli bouncers add crowdsecBouncer
+      BOUNCER_KEY_TRAEFIK: "LAPI-KEY"
+    expose:
+      - 8080
+    volumes:
+      - ./acquis.yaml:/etc/crowdsec/acquis.yaml:ro
+      - ./traefik_logs:/var/log/traefik:ro
+      - ./crowdsec-db:/var/lib/crowdsec/data/
+      - ./crowdsec-config:/etc/crowdsec/
     labels:
-      - traefik.enable=false
-    networks:
-      - my_network
+      - "traefik.enable=false"
     healthcheck:
       test: ["CMD", "cscli metrics"]
       interval: 1m30s
       timeout: 30s
       retries: 5
-      start_period: 30s
+      start_period: 10s
+    networks:
+      my_network:
 
 networks:
   my_network:
