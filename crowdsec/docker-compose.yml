@@ -8,7 +8,7 @@ services:
     command:
       - "--log.level=DEBUG"
       - "--accesslog"
-      - "--ping"
+      - "--ping=ture"
       - "--accesslog.filepath=/var/log/traefik/access.log"
       - "--api.insecure=true"
       - "--providers.docker=true"
@@ -58,11 +58,11 @@ services:
       - CF_API_EMAIL=
       - CF_DNS_API_TOKEN=
     healthcheck:
-      test: ["CMD", "traefik", "healthcheck"]
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
       interval: 1m30s
       timeout: 30s
       retries: 5
-      start_period: 30s
+      start_period: 3s
     networks:
       my_network:
 
@@ -86,7 +86,7 @@ services:
     labels:
       - "traefik.enable=false"
     healthcheck:
-      test: ["CMD", "cscli metrics"]
+      test: ["CMD", "cscli", "version"]
       interval: 1m30s
       timeout: 30s
       retries: 5
