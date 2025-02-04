@@ -1,17 +1,19 @@
 services:
   traefik:
+    #* Traefik ignores starting or unhealthy containers by default
     image: traefik
     container_name: traefik
     hostname: traefik
     restart: unless-stopped
     command:
-      # - "--log.level=DEBUG"
+      - "--log.level=DEBUG"
       - "--accesslog"
       - "--ping"
       - "--accesslog.filepath=/var/log/traefik/access.log"
       - "--api.insecure=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.endpoint=unix:///var/run/docker.sock"
 
       - "--metrics.prometheus=true"
       - "--metrics.prometheus.addEntryPointsLabels=true"
@@ -28,6 +30,10 @@ services:
       - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
       - "--certificatesresolvers.myresolver.acme.email=postmaster@example.com"
       - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+
+      - --certificatesresolvers.cloudflare_resolver.acme.dnschallenge.provider=cloudflare
+      - --certificatesresolvers.cloudflare_resolver.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.cloudflare_resolver.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53
 
       - "--experimental.plugins.bouncer.modulename=github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin"
       - "--experimental.plugins.bouncer.version=v1.3.0"
@@ -48,6 +54,9 @@ services:
     depends_on:
       - crowdsec
         # condition: service_healthy
+    environment:
+      - CF_API_EMAIL=
+      - CF_DNS_API_TOKEN=
     healthcheck:
       test: ["CMD", "traefik", "healthcheck"]
       interval: 1m30s
@@ -71,7 +80,6 @@ services:
     expose:
       - 8080
     volumes:
-      - ./acquis.yaml:/etc/crowdsec/acquis.yaml:ro
       - ./traefik_logs:/var/log/traefik:ro
       - ./crowdsec-db:/var/lib/crowdsec/data/
       - ./crowdsec-config:/etc/crowdsec/
@@ -90,7 +98,7 @@ services:
     image: prom/prometheus:latest
     container_name: prometheus
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus_config:/etc/prometheus/
       - ./prometheus_data:/prometheus
     ports:
       - "9090:9090"

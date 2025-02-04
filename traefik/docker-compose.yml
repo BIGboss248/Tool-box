@@ -1,10 +1,11 @@
 #kics-scan disable=d6355c88-1e8d-49e9-b2f2-f8a1ca12c75b,1c1325ff-831d-43a1-973e-839ae57dfcc0
 services:
   traefik:
+    #* Traefik ignores starting or unhealthy containers by default
     # The official v3 Traefik docker image
     image: traefik
     # Enables the web UI and tells Traefik to listen to docker
-    command: --api.insecure=true --providers.docker
+    command: --api.insecure=true --providers.docker --log.level=DEBUG
     container_name: traefik
     hostname: traefik
     ports:
