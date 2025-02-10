@@ -13,6 +13,17 @@ services:
       timeout: 30s
       retries: 5
       start_period: 30s
+    environment:
+      - GOOGLE_CLOUD_API_KEY=value  # https://cloud.google.com/api-gateway/docs/authenticate-api-keys
+      - REACT_APP_SHODAN_API_KEY=value  # https://account.shodan.io/
+      - REACT_APP_WHO_API_KEY=value # https://whoapi.com/
+      - SECURITY_TRAILS_API_KEY=value # https://securitytrails.com/corp/api
+      - CLOUDMERSIVE_API_KEY=value  # https://account.cloudmersive.com/
+      - TRANCO_USERNAME=value # https://tranco-list.eu/
+      - TRANCO_API_KEY=value  # https://tranco-list.eu/
+      - URL_SCAN_API_KEY=value  # https://urlscan.io/
+      - BUILT_WITH_API_KEY=value  # https://api.builtwith.com/
+      - TORRENT_IP_API_KEY=value  # https://iknowwhatyoudownload.com/en/api/
 networks:
   my_network:
     driver: bridge
