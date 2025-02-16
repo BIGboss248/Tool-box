@@ -10,10 +10,13 @@ services:
       - "--log.level=DEBUG"
       - "--accesslog"
       - "--ping=ture"
-      - "--accesslog.filepath=/var/log/traefik/access.log"
+      - "--accesslog.filepath=/var/log/traefik/access.log" # Traefik access logs required for crowdsec monitoring
+      #* Create a secure password for dashboard using below commands
+      #? If you see a variable not set error when placing hash in docker compose add an extera $ as escape character
+      # sudo apt-get install apache2-utils
+      # htpasswd -bnBC 10 "" yourpassword
       - "--api.insecure=true"
       - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.endpoint=unix:///var/run/docker.sock"
 
       - "--metrics.prometheus=true"
@@ -60,9 +63,8 @@ services:
     depends_on:
       - crowdsec
         # condition: service_healthy
-    environment:
-      - CF_API_EMAIL=
-      - CF_DNS_API_TOKEN=
+    env_file:
+      - settings.env
     healthcheck:
       test: ["CMD", "traefik", "healthcheck", "--ping"]
       interval: 1m30s
@@ -82,13 +84,17 @@ services:
       CUSTOM_HOSTNAME: crowdsec
       # We need to register one api key per service we will use
       #* sudo docker exec crowdsec cscli bouncers add crowdsecBouncer
-      BOUNCER_KEY_TRAEFIK: "LAPI-KEY"
+      BOUNCER_KEY_TRAEFIK: ${crowdsec_local_api_key}
+    env_file:
+      - settings.env
     expose:
       - 8080
     volumes:
-      - ./traefik_logs:/var/log/traefik:ro
-      - ./crowdsec-db:/var/lib/crowdsec/data/
-      - ./crowdsec-config:/etc/crowdsec/
+      - ./traefik_logs:/var/log/traefik:ro # Traefik access logs required for monitoring
+      - ./crowdsec-logs:/var/log/crowdsec:ro
+      - ./crowdsec-data:/var/lib/crowdsec/data
+      - ./crowdsec-auth/auth.log:/var/log/auth.log:ro
+      - ./acquis.yaml:/etc/crowdsec/acquis.yaml:ro
     labels:
       - "traefik.enable=false"
     healthcheck:
