@@ -1,6 +1,6 @@
 # Tool-box
 
-[![Quality gate](https://sonarcloud.io/api/project_badges/quality_gate?project=BIGboss248_Tool-box)](https://sonarcloud.io/summary/new_code?id=BIGboss248_Tool-box)
+[![Quality gate](https://sonarcloud.io/api/project_badges/quality_gate?project=BIGboss248_Tool-box)](https://sonarcloud.io/summary/new_code?id=BIGboss248_Tool-box) [![MegaLinter](https://github.com/BIGboss248/Tool-box/workflows/MegaLinter/badge.svg?branch=main)](https://github.com/BIGboss248/Tool-box/actions?query=workflow%3AMegaLinter+branch%3Amain)
 
 ## [Ansible Semaphore](/Ansible%20semaphore/)
 
@@ -130,7 +130,9 @@
     #automaiton #
 
 ## [Nginx proxy manager](/nginx%20proxy%20manager)
+
     #network #routing #VPN #reverse_proxy
 
 ## [ERP next](/ERP_next/)
+
     Open source system for oraganizations
