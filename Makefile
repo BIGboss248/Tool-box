@@ -45,3 +45,5 @@ minikube: kubernetes
 	sudo usermod -aG docker $USER && newgrp docker
 	curl -LO https://github.com/kubernetes/minikube/releases/latest/download/minikube-linux-$(arch)
 	sudo install minikube-linux-$(arch) /usr/local/bin/minikube && rm minikube-linux-$(arch)
+open_ports:	# make open_ports port=80
+	sudo iptables -I INPUT -p tcp -j ACCEPT --dport $(port)
