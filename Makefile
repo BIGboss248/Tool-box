@@ -42,7 +42,7 @@ docker:
 		sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y --fix-missing; \
 	fi
 minikube: kubernetes
-	sudo usermod -aG docker $USER && newgrp docker
+	sudo usermod -aG docker $$USER && newgrp docker
 	curl -LO https://github.com/kubernetes/minikube/releases/latest/download/minikube-linux-$(arch)
 	sudo install minikube-linux-$(arch) /usr/local/bin/minikube && rm minikube-linux-$(arch)
 open_ports:	# make open_ports port=80
