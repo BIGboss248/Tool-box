@@ -1,3 +1,4 @@
+SHELL = /bin/bash  # Force Make to use Bash
 machine:= $(shell uname -m)
 ifeq ($(machine),aarch64)
 arch:=arm64
@@ -7,6 +8,10 @@ endif
 kompose_download_link=https://github.com/kubernetes/kompose/releases/download/v1.35.0/kompose-linux-$(arch)
 
 kubernetes: docker
+	if kubectl version
+	then
+	echo "Kubernetes is already installed"
+	else
 	sudo apt-get update
 	# apt-transport-https may be a dummy package; if so, you can skip that package
 	sudo apt-get install -y apt-transport-https ca-certificates curl gnupg
@@ -19,11 +24,17 @@ kubernetes: docker
 	sudo chmod 644 /etc/apt/sources.list.d/kubernetes.list   # helps tools such as command-not-found to work correctly
 	sudo apt-get update
 	sudo apt-get install -y kubectl
+	fi
 
 kompose:
+	if kompose version
+	then
+	echo "Kompose is already installed"
+	else
 	curl -L "$(kompose_download_link)" -o kompose
 	chmod +x kompose
 	sudo mv ./kompose /usr/local/bin/kompose
+	fi
 
 docker:
 	@if command -v docker >/dev/null 2>&1; then \
@@ -41,9 +52,22 @@ docker:
 		sudo apt-get update -y; \
 		sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y --fix-missing; \
 	fi
+
 minikube: kubernetes
-	sudo usermod -aG docker $$USER && newgrp docker
+	if minikube version
+	then
+	echo "Minikube is already installed"
+	else
 	curl -LO https://github.com/kubernetes/minikube/releases/latest/download/minikube-linux-$(arch)
 	sudo install minikube-linux-$(arch) /usr/local/bin/minikube && rm minikube-linux-$(arch)
+	sudo usermod -aG docker $$USER && newgrp docker
+	fi
+
 open_ports:	# make open_ports port=80
 	sudo iptables -I INPUT -p tcp -j ACCEPT --dport $(port)
+
+vscode_extention:
+	code --install-extension ms-azuretools.vscode-docker
+	code --install-extension ms-kubernetes-tools.vscode-kubernetes-tools
+	code --install-extension ms-vscode.makefile-tools
+	code --install-extension aaron-bond.better-comments
