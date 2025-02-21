@@ -71,3 +71,20 @@ vscode_extention:
 	code --install-extension ms-kubernetes-tools.vscode-kubernetes-tools
 	code --install-extension ms-vscode.makefile-tools
 	code --install-extension aaron-bond.better-comments
+
+zerotier:
+	curl -s https://install.zerotier.com/ | sudo bash
+	sudo zerotier-cli join $(zerotier_network_id)
+
+zerotier_vpn:
+	sudo sysctl -w net.ipv4.ip_forward=1
+	sudo sysctl -p
+	sudo sysctl net.ipv4.ip_forward
+	# ip link show
+	sudo iptables -t nat -I POSTROUTING -o "$(PHY_IFACE)" -j MASQUERADE
+	sudo iptables -I FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+	sudo iptables -I FORWARD -i "$(PHY_IFACE)" -o "$(ZT_IFACE)" -m state --state RELATED,ESTABLISHED -j ACCEPT
+	sudo iptables -I FORWARD -i "$(ZT_IFACE)" -o "$(PHY_IFACE)" -j ACCEPT
+	sudo apt install iptables-persistent
+	sudo bash -c iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
+	sudo netfilter-persistent save
