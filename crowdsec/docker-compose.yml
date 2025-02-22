@@ -111,7 +111,7 @@ services:
     container_name: prometheus
     volumes:
       - ./prometheus_config:/etc/prometheus/
-      - ./prometheus_data:/prometheus
+      - prometheus_data:/prometheus
     ports:
       - "9090:9090"
     networks:
@@ -127,3 +127,5 @@ networks:
   my_network:
     driver: bridge
     name: my_network
+volumes:
+  prometheus_data:
