@@ -80,7 +80,7 @@ services:
     hostname: crowdsec
     restart: unless-stopped
     environment:
-      COLLECTIONS: crowdsecurity/traefik crowdsecurity/appsec-virtual-patching crowdsecurity/appsec-generic-rules
+      COLLECTIONS: crowdsecurity/traefik crowdsecurity/appsec-virtual-patching crowdsecurity/appsec-generic-rules #crowdsecurity/wordpress
       CUSTOM_HOSTNAME: crowdsec
       # We need to register one api key per service we will use
       #* sudo docker exec crowdsec cscli bouncers add crowdsecBouncer
