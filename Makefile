@@ -51,6 +51,15 @@ docker:
 		echo "deb [arch=$$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $$(. /etc/os-release && echo "$$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null; \
 		sudo apt-get update -y; \
 		sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y --fix-missing; \
+		sudo groupadd docker || true
+		sudo usermod -aG docker $$USER
+		newgrp docker
+		sudo chown "$USER":"$USER" /home/"$USER"/.docker -R || true
+		sudo chmod g+rwx "$HOME/.docker" -R || true
+		sudo systemctl enable docker.service
+		sudo systemctl enable containerd.service
+		code --install-extension ms-azuretools.vscode-docker
+		echo -e "\e[32mReboot if needed\e[0m"
 	fi
 
 minikube: kubernetes
@@ -117,6 +126,7 @@ vscode_extention:
 	code --install-extension ms-kubernetes-tools.vscode-kubernetes-tools
 	code --install-extension ms-vscode.makefile-tools
 	code --install-extension aaron-bond.better-comments
+	code --install-extension mutantdino.resourcemonitor
 
 zerotier:
 	curl -s https://install.zerotier.com/ | sudo bash
@@ -134,3 +144,10 @@ zerotier_vpn:
 	sudo apt install iptables-persistent
 	sudo bash -c iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
 	sudo netfilter-persistent save
+
+webmin:
+	curl -o webmin-setup-repo.sh https://raw.githubusercontent.com/webmin/webmin/master/webmin-setup-repo.sh
+	sudo sh webmin-setup-repo.sh
+	sudo apt-get install webmin --install-recommends
+	echo -e "\e[32mSetting root password to be able to login\e[0m"
+	sudo passwd root
