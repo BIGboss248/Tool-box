@@ -7,9 +7,9 @@ services:
     hostname: traefik
     restart: unless-stopped
     command:
-      - "--log.level=DEBUG"
+      - "--log.level=INFO"
       - "--accesslog"
-      - "--ping=ture"
+      - "--ping=true"
       - "--accesslog.filepath=/var/log/traefik/access.log" # Traefik access logs required for crowdsec monitoring
       #* Create a secure password for dashboard using below commands
       #? If you see a variable not set error when placing hash in docker compose add an extera $ as escape character
@@ -60,8 +60,8 @@ services:
       - 443:443
       - 8080:8080
       - 8082:8082 # metrics port /metrics
-    depends_on:
-      - crowdsec
+    # depends_on:
+    #   - crowdsec
         # condition: service_healthy
     env_file:
       - settings.env
