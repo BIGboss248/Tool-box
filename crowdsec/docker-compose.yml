@@ -62,7 +62,7 @@ services:
       - 8082:8082 # metrics port /metrics
     # depends_on:
     #   - crowdsec
-        # condition: service_healthy
+    # condition: service_healthy
     env_file:
       - settings.env
     healthcheck:
