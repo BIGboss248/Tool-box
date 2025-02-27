@@ -109,6 +109,7 @@ services:
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
+    restart: unless-stopped
     volumes:
       - ./prometheus_config:/etc/prometheus/
       - prometheus_data:/prometheus

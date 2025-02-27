@@ -3,6 +3,7 @@ services:
     hostname: activepieces
     container_name: activepieces
     image: activepieces/activepieces:latest
+    restart: on-failure
     # ports:
     # - "8080:80"
     volumes:
