@@ -10,7 +10,7 @@ kompose_download_link=https://github.com/kubernetes/kompose/releases/download/v1
 kubernetes: docker
 	if kubectl version
 	then
-	echo "Kubernetes is already installed"
+	echo -e "\e[32mKubernetes already installed\e[0m"
 	else
 	sudo apt-get update
 	# apt-transport-https may be a dummy package; if so, you can skip that package
@@ -27,18 +27,17 @@ kubernetes: docker
 	fi
 
 kompose:
-	if kompose version
-	then
-	echo "Kompose is already installed"
-	else
-	curl -L "$(kompose_download_link)" -o kompose
-	chmod +x kompose
-	sudo mv ./kompose /usr/local/bin/kompose
+	if kompose version;  then \
+	echo -e "\e[32mKompose already installed\e[0m"; \
+	else \
+	curl -L "$(kompose_download_link)" -o kompose; \
+	chmod +x kompose; \
+	sudo mv ./kompose /usr/local/bin/kompose; \
 	fi
 
 docker:
 	@if command -v docker >/dev/null 2>&1; then \
-		echo "Docker is already installed"; \
+		echo -e "\e[32mDocker already installed\e[0m"; \
 	else \
 		for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do sudo apt-get remove $$pkg -y; done; \
 		# Add Docker's official GPG key: \
@@ -51,21 +50,21 @@ docker:
 		echo "deb [arch=$$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $$(. /etc/os-release && echo "$$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null; \
 		sudo apt-get update -y; \
 		sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y --fix-missing; \
-		sudo groupadd docker || true
-		sudo usermod -aG docker $$USER
-		newgrp docker
-		sudo chown "$USER":"$USER" /home/"$USER"/.docker -R || true
-		sudo chmod g+rwx "$HOME/.docker" -R || true
-		sudo systemctl enable docker.service
-		sudo systemctl enable containerd.service
-		code --install-extension ms-azuretools.vscode-docker
-		echo -e "\e[32mReboot if needed\e[0m"
+		sudo groupadd docker || true; \
+		sudo usermod -aG docker $$USER; \
+		sudo chown "$$USER":"$$USER" /home/"$$USER"/.docker -R || true; \
+		sudo chmod g+rwx "$$HOME/.docker" -R || true; \
+		sudo systemctl enable docker.service; \
+		sudo systemctl enable containerd.service; \
+		code --install-extension ms-azuretools.vscode-docker; \
+		echo -e "\e[32mReboot if needed\e[0m"; \
+		sudo iptables -I FORWARD -p tcp -j ACCEPT -i docker0;
 	fi
 
 minikube: kubernetes
 	if minikube version
 	then
-	echo "Minikube is already installed"
+	echo -e "\e[32mMinikube already installed\e[0m"
 	else
 	curl -LO https://github.com/kubernetes/minikube/releases/latest/download/minikube-linux-$(arch)
 	sudo install minikube-linux-$(arch) /usr/local/bin/minikube && rm minikube-linux-$(arch)
@@ -75,7 +74,7 @@ minikube: kubernetes
 kubeadm: kubernetes
 	if kubeadm version
 	then
-	echo "Kubeadm is already installed"
+	echo -e "\e[32mKubeadm is already installed\e[0m"
 	else
 	sudo swapoff -a
 	sudo sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
@@ -151,3 +150,23 @@ webmin:
 	sudo apt-get install webmin --install-recommends
 	echo -e "\e[32mSetting root password to be able to login\e[0m"
 	sudo passwd root
+
+nginx:
+	if nginx -v; then \
+		echo -e "\e[32mNginx already installed\e[0m"; \
+	else \
+		sudo apt update; \
+		sudo apt install -y nginx; \
+	fi
+
+certbot:
+	sudo snap install core; sudo snap refresh core
+	sudo snap install --classic certbot
+	sudo ln -s /snap/bin/certbot /usr/bin/certbot
+	sudo apt install -y python3-certbot-nginx
+
+certbot_nginx:
+	sudo certbot certonly --dns-cloudflare --dns-cloudflare-credentials ~/.cloudflare/credentials --server https://acme-v02.api.letsencrypt.org/directory -d $DOMAIN -d *.$DOMAIN --email $EMAIL --agree-tos --no-eff-email
+
+test:
+	sudo iptables -I FORWARD -p tcp -j ACCEPT -i docker0
