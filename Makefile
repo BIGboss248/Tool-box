@@ -8,35 +8,33 @@ endif
 kompose_download_link=https://github.com/kubernetes/kompose/releases/download/v1.35.0/kompose-linux-$(arch)
 
 kubernetes: docker
-	if kubectl version
-	then
-	echo -e "\e[32mKubernetes already installed\e[0m"
-	else
-	sudo apt-get update
-	# apt-transport-https may be a dummy package; if so, you can skip that package
-	sudo apt-get install -y apt-transport-https ca-certificates curl gnupg
-	# If the folder `/etc/apt/keyrings` does not exist, it should be created before the curl command, read the note below.
-	# sudo mkdir -p -m 755 /etc/apt/keyrings
-	curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-	sudo chmod 644 /etc/apt/keyrings/kubernetes-apt-keyring.gpg # allow unprivileged APT programs to read this keyring
-	# This overwrites any existing configuration in /etc/apt/sources.list.d/kubernetes.list
-	echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
-	sudo chmod 644 /etc/apt/sources.list.d/kubernetes.list   # helps tools such as command-not-found to work correctly
-	sudo apt-get update
-	sudo apt-get install -y kubectl
+	if kubectl; \
+	then \
+		echo -e "\e[32mKubernetes already installed\e[0m"; \
+	else \
+		sudo apt-get update; \
+		sudo apt-get install -y apt-transport-https ca-certificates curl gnupg; \
+		curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg; \
+		sudo chmod 644 /etc/apt/keyrings/kubernetes-apt-keyring.gpg; \
+		echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list; \
+		sudo chmod 644 /etc/apt/sources.list.d/kubernetes.list; \
+		sudo apt-get update; \
+		sudo apt-get install -y kubectl; \
 	fi
 
 kompose:
-	if kompose version;  then \
-	echo -e "\e[32mKompose already installed\e[0m"; \
+	if kompose version;\
+	then \
+		echo -e "\e[32mKompose already installed\e[0m"; \
 	else \
-	curl -L "$(kompose_download_link)" -o kompose; \
-	chmod +x kompose; \
-	sudo mv ./kompose /usr/local/bin/kompose; \
+		curl -L "$(kompose_download_link)" -o kompose; \
+		chmod +x kompose; \
+		sudo mv ./kompose /usr/local/bin/kompose; \
 	fi
 
 docker:
-	@if command -v docker >/dev/null 2>&1; then \
+	@if command -v docker >/dev/null 2>&1; \
+	then \
 		echo -e "\e[32mDocker already installed\e[0m"; \
 	else \
 		for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do sudo apt-get remove $$pkg -y; done; \
@@ -58,63 +56,63 @@ docker:
 		sudo systemctl enable containerd.service; \
 		code --install-extension ms-azuretools.vscode-docker; \
 		echo -e "\e[32mReboot if needed\e[0m"; \
-		sudo iptables -I FORWARD -p tcp -j ACCEPT -i docker0;
+		sudo iptables -I FORWARD -p tcp -j ACCEPT -i docker0; \
 	fi
 
 minikube: kubernetes
-	if minikube version
-	then
-	echo -e "\e[32mMinikube already installed\e[0m"
-	else
-	curl -LO https://github.com/kubernetes/minikube/releases/latest/download/minikube-linux-$(arch)
-	sudo install minikube-linux-$(arch) /usr/local/bin/minikube && rm minikube-linux-$(arch)
-	sudo usermod -aG docker $$USER && newgrp docker
+	if minikube version;\
+	then\
+		echo -e "\e[32mMinikube already installed\e[0m";\
+	else\
+		curl -LO https://github.com/kubernetes/minikube/releases/latest/download/minikube-linux-$(arch);\
+		sudo install minikube-linux-$(arch) /usr/local/bin/minikube && rm minikube-linux-$(arch);\
+		sudo usermod -aG docker $$USER && newgrp docker;\
 	fi
 
 kubeadm: kubernetes
-	if kubeadm version
-	then
-	echo -e "\e[32mKubeadm is already installed\e[0m"
-	else
-	sudo swapoff -a
-	sudo sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
-	sudo lsmod | grep br_netfilter
-	sudo sudo modprobe br_netfilter
-	sudo cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
-	net.bridge.bridge-nf-call-ip6tables = 1
-	net.bridge.bridge-nf-call-iptables = 1
-	EOF
-	sudo sysctl --system
-	cat <<EOF | sudo tee /etc/docker/daemon.json
-	{
-	"exec-opts": ["native.cgroupdriver=systemd"],
-	"log-driver": "json-file",
-	"log-opts": {
-		"max-size": "100m"
-	},
-	"storage-driver": "overlay2"
-	}
-	EOF
-	sudo systemctl daemon-reload
-	sudo systemctl enable docker
-	sudo systemctl restart docker
-	sudo systemctl status docker
-	sudo apt-get update && sudo apt-get install -y apt-transport-https ca-certificates curl gpg
-	sudo curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-	echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
-	sudo apt-get update
-	sudo apt-get install -y kubelet kubeadm
-	sudo apt-mark hold kubelet kubeadm
-	sudo systemctl daemon-reload
-	sudo systemctl enable kubelet
-	sudo systemctl restart kubelet
-	sudo systemctl status kubelet
-	sudo rm /etc/containerd/config.toml
-	sudo systemctl restart containerd
-	sudo kubeadm init
-	mkdir -p HOME/.kube
-	sudo cp -i /etc/kubernetes/admin.conf HOME/.kube/config
-	sudo chown $(id -u):$(id -g) HOME/.kube/config
+	if kubeadm version; \
+	then\
+		echo -e "\e[32mKubeadm is already installed\e[0m"; \
+	else\
+		sudo swapoff -a; \
+		sudo sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab; \
+		sudo lsmod | grep br_netfilter; \
+		sudo sudo modprobe br_netfilter; \
+		sudo cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf; \
+		net.bridge.bridge-nf-call-ip6tables = 1; \
+		net.bridge.bridge-nf-call-iptables = 1; \
+		EOF; \
+		sudo sysctl --system; \
+		cat <<EOF | sudo tee /etc/docker/daemon.json; \
+		{\
+		"exec-opts": ["native.cgroupdriver=systemd"],; \
+		"log-driver": "json-file",; \
+		"log-opts": {; \
+			"max-size": "100m"; \
+		},\
+		"storage-driver": "overlay2"; \
+		}\
+		EOF; \
+		sudo systemctl daemon-reload; \
+		sudo systemctl enable docker; \
+		sudo systemctl restart docker; \
+		sudo systemctl status docker; \
+		sudo apt-get update && sudo apt-get install -y apt-transport-https ca-certificates curl gpg; \
+		sudo curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg; \
+		echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list; \
+		sudo apt-get update; \
+		sudo apt-get install -y kubelet kubeadm; \
+		sudo apt-mark hold kubelet kubeadm; \
+		sudo systemctl daemon-reload; \
+		sudo systemctl enable kubelet; \
+		sudo systemctl restart kubelet; \
+		sudo systemctl status kubelet; \
+		sudo rm /etc/containerd/config.toml; \
+		sudo systemctl restart containerd; \
+		sudo kubeadm init; \
+		mkdir -p HOME/.kube; \
+		sudo cp -i /etc/kubernetes/admin.conf HOME/.kube/config; \
+		sudo chown $(id -u):$(id -g) HOME/.kube/config; \
 	fi
 
 open_ports:	# make open_ports port=80
@@ -162,7 +160,7 @@ nginx:
 certbot:
 	sudo snap install core; sudo snap refresh core
 	sudo snap install --classic certbot
-	sudo ln -s /snap/bin/certbot /usr/bin/certbot
+	sudo ln -s /snap/bin/certbot /usr/bin/certbot || true
 	sudo apt install -y python3-certbot-nginx
 
 certbot_nginx:
