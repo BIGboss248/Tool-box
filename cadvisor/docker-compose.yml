@@ -19,3 +19,8 @@ services:
       - my_network
     devices:
       - /dev/kmsg
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
