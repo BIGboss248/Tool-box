@@ -49,13 +49,13 @@ docker:
 		sudo apt-get update -y; \
 		sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y --fix-missing; \
 		sudo groupadd docker || true; \
-		sudo usermod -aG docker $$USER; \
+		sudo usermod -aG docker $$USER && newgrp docker; \
 		sudo chown "$$USER":"$$USER" /home/"$$USER"/.docker -R || true; \
 		sudo chmod g+rwx "$$HOME/.docker" -R || true; \
 		sudo systemctl enable docker.service; \
 		sudo systemctl enable containerd.service; \
 		code --install-extension ms-azuretools.vscode-docker; \
-		echo -e "\e[32mReboot if needed\e[0m"; \
+		echo -e "\e[32mFor vscode extentions reboot is needed\e[0m"; \
 		sudo iptables -I FORWARD -p tcp -j ACCEPT -i docker0; \
 	fi
 
@@ -161,10 +161,17 @@ certbot:
 	sudo snap install core; sudo snap refresh core
 	sudo snap install --classic certbot
 	sudo ln -s /snap/bin/certbot /usr/bin/certbot || true
-	sudo apt install -y python3-certbot-nginx
+	sudo snap set certbot trust-plugin-with-root=ok
 
-certbot_nginx:
-	sudo certbot certonly --dns-cloudflare --dns-cloudflare-credentials ~/.cloudflare/credentials --server https://acme-v02.api.letsencrypt.org/directory -d $DOMAIN -d *.$DOMAIN --email $EMAIL --agree-tos --no-eff-email
+certbot_cloudflare: certbot
+	mkdir ~/.cloudflare || true
+	touch ~/.cloudflare/credentials.ini
+	echo "dns_cloudflare_api_token = $(CLOUDFLARE_API_TOKEN)" > ~/.cloudflare/credentials.ini
+	chmod 600 ~/.cloudflare/credentials.ini
+	sudo snap install certbot-dns-cloudflare
 
-test:
-	sudo iptables -I FORWARD -p tcp -j ACCEPT -i docker0
+certbot_nginx: certbot_cloudflare nginx
+	sudo iptables -I INPUT -p tcp -j ACCEPT --dport 80
+	sudo iptables -I INPUT -p tcp -j ACCEPT --dport 443
+	sudo certbot --nginx --dns-cloudflare-credentials ~/.cloudflare/credentials.ini -d $(DOMAIN)
+	sudo certbot renew --dry-run
