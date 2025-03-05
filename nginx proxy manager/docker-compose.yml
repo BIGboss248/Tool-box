@@ -37,5 +37,5 @@ services:
     # Email:    admin@example.com Pass: changeme
 networks:
   my_network:
-    driver: Bridge
+    driver: bridge
     name: my_network
