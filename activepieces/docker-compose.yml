@@ -2,6 +2,7 @@ services:
   activepieces:
     hostname: activepieces
     container_name: activepieces
+    restart: unless-stopped
     image: activepieces/activepieces:latest
     restart: on-failure
     # ports:
