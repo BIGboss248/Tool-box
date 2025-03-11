@@ -4,7 +4,6 @@ services:
     container_name: activepieces
     restart: unless-stopped
     image: activepieces/activepieces:latest
-    restart: on-failure
     # ports:
     # - "8080:80"
     volumes:
