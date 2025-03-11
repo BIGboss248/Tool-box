@@ -150,6 +150,7 @@ webmin:
 	sudo passwd root
 
 nginx:
+	code --install-extension ahmadalli.vscode-nginx-conf
 	if nginx -v; then \
 		echo -e "\e[32mNginx already installed\e[0m"; \
 	else \
@@ -173,5 +174,5 @@ certbot_cloudflare: certbot
 certbot_nginx: certbot_cloudflare nginx
 	sudo iptables -I INPUT -p tcp -j ACCEPT --dport 80
 	sudo iptables -I INPUT -p tcp -j ACCEPT --dport 443
-	sudo certbot --nginx --dns-cloudflare-credentials ~/.cloudflare/credentials.ini -d $(DOMAIN)
+	sudo certbot certonly --dns-cloudflare --agree-tos --no-eff-email --dns-cloudflare --dns-cloudflare-credentials ~/.cloudflare/credentials.ini -d $(DOMAIN)
 	sudo certbot renew --dry-run
