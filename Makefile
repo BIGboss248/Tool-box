@@ -6,6 +6,7 @@ else
 arch:=amd64
 endif
 kompose_download_link=https://github.com/kubernetes/kompose/releases/download/v1.35.0/kompose-linux-$(arch)
+.PHONY: kubernetes kompose docker minikube kubeadm open_ports vscode_extention zerotier zerotier_vpn webmin nginx certbot certbot_cloudflare certbot_nginx node_exporter
 
 kubernetes: docker
 	if kubectl; \
@@ -181,6 +182,11 @@ certbot_nginx: certbot_cloudflare nginx
 	sudo certbot certonly --dns-cloudflare --agree-tos --no-eff-email --dns-cloudflare --dns-cloudflare-credentials ~/.cloudflare/credentials.ini -d $(DOMAIN)
 	sudo certbot renew --dry-run
 
-node_exporter: docker
+node_exporter_docker: docker
 	docker run -d --restart unless-stopped --hostname node_exporter --name node_exporter --network my_network --pid="host" -v "$$HOME/node_exporter:/host:ro,rslave" quay.io/prometheus/node-exporter:latest --path.rootfs=/host || true
 	docker logs node_exporter
+
+node_exporter:
+	sudo wget https://github.com/prometheus/node_exporter/releases/download/v1.9.0/node_exporter-1.9.0.linux-$(arch).tar.gz
+	sudo tar xvfz node_exporter-1.9.0.linux-$(arch).tar.gz
+	./node_exporter-1.9.0.linux-$(arch)/node_exporter
