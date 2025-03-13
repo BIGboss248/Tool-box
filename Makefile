@@ -180,3 +180,7 @@ certbot_nginx: certbot_cloudflare nginx
 	sudo iptables -I INPUT -p tcp -j ACCEPT --dport 443
 	sudo certbot certonly --dns-cloudflare --agree-tos --no-eff-email --dns-cloudflare --dns-cloudflare-credentials ~/.cloudflare/credentials.ini -d $(DOMAIN)
 	sudo certbot renew --dry-run
+
+node_exporter: docker
+	docker run -d --restart unless-stopped --hostname node_exporter --name node_exporter --network my_network --pid="host" -v "$$HOME/node_exporter:/host:ro,rslave" quay.io/prometheus/node-exporter:latest --path.rootfs=/host || true
+	docker logs node_exporter

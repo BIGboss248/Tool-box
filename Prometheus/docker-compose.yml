@@ -1,6 +1,9 @@
 services:
   prometheus:
     image: prom/prometheus
+    # user: root #* needed to work properly
+    networks:
+      - my_network
     ports:
       - 9090:9090
     volumes:
@@ -12,3 +15,7 @@ services:
       timeout: 15s
       retries: 10
       start_period: 40s
+networks:
+  my_network:
+    driver: bridge
+    name: my_network
