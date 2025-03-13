@@ -165,11 +165,15 @@ certbot:
 	sudo snap set certbot trust-plugin-with-root=ok
 
 certbot_cloudflare: certbot
-	mkdir ~/.cloudflare || true
-	touch ~/.cloudflare/credentials.ini
-	echo "dns_cloudflare_api_token = $(CLOUDFLARE_API_TOKEN)" > ~/.cloudflare/credentials.ini
-	chmod 600 ~/.cloudflare/credentials.ini
-	sudo snap install certbot-dns-cloudflare
+	if [ -f ~/.cloudflare/credentials.ini ]; then \
+		echo -e "\e[32mCloudflare credentials already exist\e[0m"; \
+	else \
+	mkdir ~/.cloudflare || true; \
+	touch ~/.cloudflare/credentials.ini; \
+	echo "dns_cloudflare_api_token = $(CLOUDFLARE_API_TOKEN)" > ~/.cloudflare/credentials.ini; \
+	chmod 600 ~/.cloudflare/credentials.ini; \
+	sudo snap install certbot-dns-cloudflare; \
+	fi
 
 certbot_nginx: certbot_cloudflare nginx
 	sudo iptables -I INPUT -p tcp -j ACCEPT --dport 80
