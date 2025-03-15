@@ -117,7 +117,7 @@ kubeadm: kubernetes
 	fi
 
 open_ports:	# make open_ports port=80
-	sudo iptables -I INPUT -p tcp -j ACCEPT --dport $(port)
+	sudo iptables -I INPUT -p tcp -j ACCEPT --dport $(PORT)
 
 vscode_extention:
 	code --install-extension ms-azuretools.vscode-docker
@@ -128,7 +128,7 @@ vscode_extention:
 
 zerotier:
 	curl -s https://install.zerotier.com/ | sudo bash
-	sudo zerotier-cli join $(zerotier_network_id)
+	sudo zerotier-cli join $(ZEROTIER_NETWORK_ID)
 
 zerotier_vpn:
 	sudo sysctl -w net.ipv4.ip_forward=1
@@ -182,11 +182,8 @@ certbot_nginx: certbot_cloudflare nginx
 	sudo certbot certonly --dns-cloudflare --agree-tos --no-eff-email --dns-cloudflare --dns-cloudflare-credentials ~/.cloudflare/credentials.ini -d $(DOMAIN)
 	sudo certbot renew --dry-run
 
-node_exporter_docker: docker
-	docker run -d --restart unless-stopped --hostname node_exporter --name node_exporter --network my_network --pid="host" -v "$$HOME/node_exporter:/host:ro,rslave" quay.io/prometheus/node-exporter:latest --path.rootfs=/host || true
-	docker logs node_exporter
-
 node_exporter:
+	sudo iptables -I INPUT -p tcp -j ACCEPT --dport 9100
 	sudo wget https://github.com/prometheus/node_exporter/releases/download/v1.9.0/node_exporter-1.9.0.linux-$(arch).tar.gz
 	sudo tar xvfz node_exporter-1.9.0.linux-$(arch).tar.gz
 	./node_exporter-1.9.0.linux-$(arch)/node_exporter
