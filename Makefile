@@ -8,6 +8,11 @@ endif
 kompose_download_link=https://github.com/kubernetes/kompose/releases/download/v1.35.0/kompose-linux-$(arch)
 .PHONY: kubernetes kompose docker minikube kubeadm open_ports vscode_extention zerotier zerotier_vpn webmin nginx certbot certbot_cloudflare certbot_nginx node_exporter
 
+ssr:
+	wget – no-check-certificate https://raw.githubusercontent.com/teddysun/shadowsocks_install/master/shadowsocksR.sh
+	sudo chmod +x shadowsocksR.sh
+	sudo apt install gcc
+	sudo ./shadowsocksR.sh 2>&1 | tee shadowsocksR.log
 kubernetes: docker
 	if kubectl; \
 	then \
