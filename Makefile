@@ -9,7 +9,8 @@ kompose_download_link=https://github.com/kubernetes/kompose/releases/download/v1
 .PHONY: kubernetes kompose docker minikube kubeadm open_ports vscode_extention zerotier zerotier_vpn webmin nginx certbot certbot_cloudflare certbot_nginx node_exporter
 
 ssr:
-	wget – no-check-certificate https://raw.githubusercontent.com/teddysun/shadowsocks_install/master/shadowsocksR.sh
+	sudo iptables -I INPUT -p tcp -j ACCEPT --dport $(PORT)
+	wget https://raw.githubusercontent.com/teddysun/shadowsocks_install/master/shadowsocksR.sh
 	sudo chmod +x shadowsocksR.sh
 	sudo apt install gcc
 	sudo ./shadowsocksR.sh 2>&1 | tee shadowsocksR.log
