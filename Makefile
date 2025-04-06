@@ -13,6 +13,7 @@ ssr:
 	sudo chmod +x shadowsocksR.sh
 	sudo apt install gcc
 	sudo ./shadowsocksR.sh 2>&1 | tee shadowsocksR.log
+
 kubernetes: docker
 	if kubectl; \
 	then \
