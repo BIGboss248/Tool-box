@@ -13,6 +13,8 @@ services:
     environment:
       # cron scheduling for updating
       - WATCHTOWER_SCHEDULE="0 0 4 * * *"
+      - WATCHTOWER_CLEANUP=true
+
 networks:
   my_network:
     driver: bridge
