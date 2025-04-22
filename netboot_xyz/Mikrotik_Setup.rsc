@@ -19,7 +19,7 @@
 add address=archive.ubuntu.com list=ubuntu 
 add address=releases.ubuntu.com list=ubuntu 
 /ip proxy
-set enabled=yes cache-on-disk=yes max-cache-size=unlimited max-cache-object-size=0 cache-path=/disk1/web-proxy
+set enabled=yes cache-on-disk=yes max-cache-size=unlimited max-cache-object-size=1000000000 cache-path=/disk1/web-proxy
 /ip proxy access
 add action=allow
 /ip firewall nat

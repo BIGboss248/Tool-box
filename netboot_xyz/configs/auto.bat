@@ -68,7 +68,7 @@ wpeinit
 
 REM I had to add a delay, otherwise my net use F: command below didn't work
 REM So don't remove this, I spent hours trying to figure it out, maybe there's a better way, let me know
-ping 127.0.0.1 -n 10 > nul
+@REM ping 127.0.0.1 -n 10 > nul
 
 echo.
 echo Verifying network connectivity to samba sever on %SERVER%...
@@ -93,7 +93,7 @@ for /L %%i in (1,1,3) do (
         echo Failed to mount the drive. Error Level: %errorlevel%
         if %%i lss 3 (
             echo Attempt %%i of 3 failed, trying again
-            ping 127.0.0.1 -n 10 > nul
+            @REM ping 127.0.0.1 -n 10 > nul
         ) else (
             echo All attempts to mount the drive have failed.
             echo Try restarting the SAMBA docker container as a troubleshooting step
@@ -114,11 +114,15 @@ for /L %%i in (1,1,3) do (
         echo Failed to execute setup. Error Level: %errorlevel%
         if %%i lss 3 (
             echo Attempt %%i of 3 failed, trying again
-            ping 127.0.0.1 -n 20 > nul
+            @REM ping 127.0.0.1 -n 20 > nul
         ) else (
             echo All attempts to execute setup have failed.
-            echo Try restarting the SAMBA docker container as a troubleshooting step
-            pause
+            echo You can now troubleshoot manually.
+            echo Type 'exit' to quit manual mode and return to the script.
+            echo try running these commands:
+            echo net use \\%SERVER%\%SHARE% /user:%USERNAME% "%PASSWORD%"
+            echo \\%SERVER%\%SHARE%\%SETUP_PATH%\setup.exe /unattend:\\%SERVER%\%SHARE%\%AUTOATTEND_PATH%
+            cmd
         )
     )
 )
