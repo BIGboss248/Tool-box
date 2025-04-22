@@ -14,6 +14,21 @@
 /ip dhcp-server/matcher/add name="pxe-uefi-matcher" server=DHCPSERVER address-pool=DHCPPool option-set=pxe-uefi code=93 value="0x0007" matching-type=substring
 /ip/dhcp-server/network/set NUMBER-DHCP-NETWORK dhcp-option=pxe-uefi-netboot.xyz,pxe-bios-netboot.xyz,pxe-uefi-snp-netboot.xyz next-server=NEXTSERVER
 
+# Cache ubuntu images
+/ip firewall address-list
+add address=archive.ubuntu.com list=ubuntu 
+add address=releases.ubuntu.com list=ubuntu 
+/ip proxy
+set enabled=yes cache-on-disk=yes max-cache-size=unlimited max-cache-object-size=0 cache-path=/disk1/web-proxy
+/ip proxy access
+add action=allow
+/ip firewall nat
+add chain=dstnat action=redirect to-ports=8080 dst-address-list=ubuntu place-before=0 
+/ip firewall mangle
+add chain=prerouting action=accept dst-address-list=ubuntu place-before=0
+add chain=output action=mark-routing routing-mark=VPN dst-address-list=ubuntu place-before=0
+
+
 /container mounts
 add dst=/assets name=pxe-assets src=/disk1/docker_volumes/pxe/assets
 /container
