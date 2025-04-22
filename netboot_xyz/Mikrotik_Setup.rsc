@@ -16,8 +16,9 @@
 
 # Cache ubuntu images
 /ip firewall address-list
-add address=archive.ubuntu.com list=ubuntu 
-add address=releases.ubuntu.com list=ubuntu 
+add address=archive.ubuntu.com list=ubuntu
+add address=releases.ubuntu.com list=ubuntu
+add address=cdimage.ubuntu.com list=ubuntu
 /ip proxy
 set enabled=yes cache-on-disk=yes max-cache-size=unlimited max-cache-object-size=1000000000 cache-path=/disk1/web-proxy
 /ip proxy access
