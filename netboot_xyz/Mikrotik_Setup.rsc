@@ -1,16 +1,18 @@
 # DHCPSERVER => DHCP server name
 # DHCPPool => DHCP server pool name
 # NEXTSERVER => IP address of the netboot.xyz server
-# Source https://technotim.live/posts/netbootxyz-tutorial/
+# NUMBER-DHCP-NETWORK => Number of DHCP network
+# Source https://linkarzu.com/posts/docker-practical/windows11-netbootxyz/#configure-router-after-setting-up-container
 /ip dhcp-server/set DHCPSERVER bootp-support=none
 /ip dhcp-server option add code=67 name=pxe-bios-netboot.xyz value="'netboot.xyz.kpxe'"
 /ip dhcp-server/option/sets add name="pxe-bios" options=pxe-bios-netboot.xyz
 /ip dhcp-server/set DHCPSERVER dhcp-option-set=pxe-bios
 
 /ip dhcp-server option add code=67 name=pxe-uefi-netboot.xyz value="'netboot.xyz.efi'"
+/ip dhcp-server option add code=67 name=pxe-uefi-snp-netboot.xyz value="'netboot.xyz-snp.efi'"
 /ip dhcp-server/option/sets add name="pxe-uefi" options=pxe-uefi-netboot.xyz
 /ip dhcp-server/matcher/add name="pxe-uefi-matcher" server=DHCPSERVER address-pool=DHCPPool option-set=pxe-uefi code=93 value="0x0007" matching-type=substring
-/ip/dhcp-server/network/set 0 dhcp-option=pxe-uefi-netboot.xyz,pxe-bios-netboot.xyz next-server=NEXTSERVER
+/ip/dhcp-server/network/set NUMBER-DHCP-NETWORK dhcp-option=pxe-uefi-netboot.xyz,pxe-bios-netboot.xyz,pxe-uefi-snp-netboot.xyz next-server=NEXTSERVER
 
 /container mounts
 add dst=/assets name=pxe-assets src=/disk1/docker_volumes/pxe/assets
