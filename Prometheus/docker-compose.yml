@@ -1,6 +1,9 @@
 services:
   prometheus:
     image: prom/prometheus
+    hostname: prometheus
+    container_name: prometheus
+    restart: always
     # user: root #* needed to work properly
     networks:
       - my_network
