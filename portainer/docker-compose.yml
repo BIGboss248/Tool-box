@@ -19,20 +19,21 @@ services:
     restart: always
     ports:
       - 8000:8000
-      - 9443:9443
+      - 9443:9443 # Login https://<host>:9443
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
     networks:
       - my_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000"]
-      interval: 1m30s
-      timeout: 10s
+      test: ["CMD", "wget", "--spider", "https://localhost:9443"]
+      interval: 15s
+      timeout: 5s
       retries: 3
 
 volumes:
   portainer_data:
 networks:
   my_network:
+    name: my_network
     driver: bridge
