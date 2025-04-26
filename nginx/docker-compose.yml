@@ -10,7 +10,7 @@ services:
     restart: always
     volumes:
       - ./cache/:/cache/:rw # Cache
-      - ./conf/:/etc/nginx/conf.d/:ro # Nginx conf
+      - ./conf/:/etc/nginx/:ro # Nginx conf
       - ./certbot/www:/var/www/certbot/:ro # certbot webroot
       - ./certbot/letsencrypt/:/etc/letsencrypt/live/:ro # SSL certs
     networks:
