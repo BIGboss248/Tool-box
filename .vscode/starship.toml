@@ -2,8 +2,8 @@
 
 add_newline = false
 command_timeout = 1000
-format = """$os$username$hostname$kubernetes$git_branch$git_status
-|$directory
+format = """$container$os$username $battery $hostname $localip $netns $git_branch $git_status $docker_context $kubernetes $nodejs $dart $golang
+$shell $directory
 └─> """
 
 # Drop ugly default prompt characters
@@ -11,91 +11,174 @@ format = """$os$username$hostname$kubernetes$git_branch$git_status
 success_symbol = ''
 error_symbol = ''
 
-# ---
+[container]
+disabled = false
+symbol = "⬢"
+format = '[$symbol \[$name\]]($style) '
+style = "red bold dimmed"
+
+[battery]
+format = '[$symbol$percentage]($style) '
+full_symbol = '🔋 '
+charging_symbol = '⚡️ '
+
+[[battery.display]]
+threshold = 20
+style = 'bold red'
+
+[[battery.display]]
+threshold = 50
+style = 'bold yellow'
 
 [os]
-format = '[$symbol](bold white) '
+format = '[$symbol]() '
 disabled = false
 
+
+# This is the default symbols table.
 [os.symbols]
-Windows = ''
-Arch = '󰣇'
-Ubuntu = ''
-Macos = '󰀵'
+Debian = ""
+Kali = ""
+Linux = "🐧"
+Ubuntu = "󰕈"
+Windows = "🪟"
 
 # ---
 
 # Shows the username
 [username]
-style_user = 'white bold'
-style_root = 'black bold'
+style_user = 'white underline'
+style_root = 'blue'
 format = '[$user]($style) '
 disabled = false
 show_always = true
 
 # Shows the hostname
 [hostname]
-ssh_only = false
-format = 'host=>[$hostname](bold yellow) '
+ssh_only = true
+format = '$ssh_symbol [$hostname](bold yellow) '
+ssh_symbol = '🌐'
 disabled = false
 
 # Shows current directory
 [directory]
+truncate_to_repo = false
 truncation_length = 70
 truncation_symbol = '…/'
 home_symbol = '󰋜 ~'
-read_only_style = '197'
-read_only = '  '
+# read_only_style = '197'
+read_only = '🔒'
 format = 'at [$path]($style)[$read_only]($read_only_style) '
 
 # Shows current git branch
 [git_branch]
-symbol = ''
-format = 'via [$symbol$branch]($style)'
-# truncation_length = 4
-truncation_symbol = '…/'
+symbol = ''
+format = '[$symbol $branch]($style)'
 style = 'bold green'
 
 # Shows current git status
 [git_status]
-format = '([ \( $all_status$ahead_behind\)]($style) )'
+format = '([\[$all_status$ahead_behind\]]($style) )'
 style = 'bold green'
-conflicted = '🏳'
+conflicted = '='
 up_to_date = ''
-untracked = ' '
+untracked = '?'
 ahead = '⇡${count}'
 diverged = '⇕⇡${ahead_count}⇣${behind_count}'
 behind = '⇣${count}'
-stashed = ' '
-modified = ' '
+stashed = '+'
+modified = '!'
 staged = '[++\($count\)](green)'
-renamed = '襁 '
-deleted = ' '
+renamed = '»'
+deleted = ''
+
+[docker_context]
+disabled = false
+only_with_files = true
+detect_files = ['docker-compose.yml', 'docker-compose.yaml', 'Dockerfile']
+format = '[🐋 $context](blue bold)'
+
 
 # Shows kubernetes context and namespace
 [kubernetes]
-format = 'via [󱃾 $context\($namespace\)](bold purple) '
+format = '[󱃾 $context\($namespace\)](bold purple) '
 disabled = false
 
 # ---
 
 [package]
-symbol = "󰏗 "
+format = 'via [📦 $version](208 bold) '
 
 [pijul_channel]
-symbol = " "
+symbol = ""
 
 [python]
-symbol = " "
+symbol = ""
+pyenv_version_name = true
 
 [rlang]
-symbol = "󰟔 "
+symbol = "󰟔"
 
 [ruby]
-symbol = " "
+symbol = ""
 
 [rust]
-symbol = " "
+symbol = ""
 
 [scala]
-symbol = " "
+symbol = ""
+
+[dart]
+format = '[🎯 $version](white) '
+detect_files = ["pubspec.yaml", "pubspec.yml", "pubspec.lock"]
+disabled = false
+style = "bold blue"
+symbol = "🎯 "
+
+[golang]
+format = 'via [$symbol($version )($mod_version )]($style)'
+
+[localip]
+ssh_only = false
+format = '@[$localipv4](white) '
+disabled = false
+
+[netns]
+disabled = false
+style = 'bold yellow'
+symbol = '🛜 '
+format = '[$symbol$netns]($style) '
+
+[nodejs]
+format = 'via [🤖 $version](bold green) '
+style = "bold green"
+symbol = " "
+detect_files = [
+    "package.json",
+    ".node-version",
+    ".nvmrc",
+    "!bunfig.toml",
+    "!bun.lock",
+    "!bun.lockb",
+]
+disabled = false
+version_format = "v"
+
+[shell]
+fish_indicator = '󰈺'
+bash_indicator = ''
+cmd_indicator = ''
+zsh_indicator = ''
+powershell_indicator = '󰨊'
+unknown_indicator = 'mystery shell'
+style = 'cyan bold'
+disabled = false
+format = '[$indicator]($style)'
+
+[status]
+
+symbol = '🔴'
+success_symbol = '🟢'
+format = '$symbol'
+map_symbol = true
+disabled = false
