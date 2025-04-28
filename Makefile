@@ -218,3 +218,110 @@ node_exporter:
 	sudo systemctl enable node_exporter
 	sudo systemctl start node_exporter
 	sudo systemctl status node_exporter
+
+starship:
+	curl -sS https://starship.rs/install.sh | sudo sh
+	echo 'eval "$$(starship init bash)"' >> ~/.bashrc
+	mkdir -p ~/.config && sudo touch ~/.config/starship.toml
+	export STARSHIP_CONFIG=~/example/non/default/path/starship.toml
+	echo '# ~/.config/starship.toml' | sudo tee ~/.config/starship.toml
+	echo '' | sudo tee -a ~/.config/starship.toml
+	echo 'add_newline = false' | sudo tee -a ~/.config/starship.toml
+	echo 'command_timeout = 1000' | sudo tee -a ~/.config/starship.toml
+	echo 'format = """$$os$$username$$hostname$$kubernetes$$git_branch$$git_status' | sudo tee -a ~/.config/starship.toml
+	echo '|$$directory' | sudo tee -a ~/.config/starship.toml
+	echo '└─> """' | sudo tee -a ~/.config/starship.toml
+	echo '' | sudo tee -a ~/.config/starship.toml
+	echo '# Drop ugly default prompt characters' | sudo tee -a ~/.config/starship.toml
+	echo '[character]' | sudo tee -a ~/.config/starship.toml
+	echo "success_symbol = ''" | sudo tee -a ~/.config/starship.toml
+	echo "error_symbol = ''" | sudo tee -a ~/.config/starship.toml
+	echo '' | sudo tee -a ~/.config/starship.toml
+	echo '# ---' | sudo tee -a ~/.config/starship.toml
+	echo '' | sudo tee -a ~/.config/starship.toml
+	echo '[os]' | sudo tee -a ~/.config/starship.toml
+	echo "format = '[$$symbol](bold white) '" | sudo tee -a ~/.config/starship.toml
+	echo 'disabled = false' | sudo tee -a ~/.config/starship.toml
+	echo '' | sudo tee -a ~/.config/starship.toml
+	echo '[os.symbols]' | sudo tee -a ~/.config/starship.toml
+	echo "Windows = ''" | sudo tee -a ~/.config/starship.toml
+	echo "Arch = '󰣇'" | sudo tee -a ~/.config/starship.toml
+	echo "Ubuntu = ''" | sudo tee -a ~/.config/starship.toml
+	echo "Macos = '󰀵'" | sudo tee -a ~/.config/starship.toml
+	echo '' | sudo tee -a ~/.config/starship.toml
+	echo '# ---' | sudo tee -a ~/.config/starship.toml
+	echo '' | sudo tee -a ~/.config/starship.toml
+	echo '# Shows the username' | sudo tee -a ~/.config/starship.toml
+	echo '[username]' | sudo tee -a ~/.config/starship.toml
+	echo "style_user = 'white bold'" | sudo tee -a ~/.config/starship.toml
+	echo "style_root = 'black bold'" | sudo tee -a ~/.config/starship.toml
+	echo "format = '[$$user]($$style) '" | sudo tee -a ~/.config/starship.toml
+	echo 'disabled = false' | sudo tee -a ~/.config/starship.toml
+	echo 'show_always = true' | sudo tee -a ~/.config/starship.toml
+	echo '' | sudo tee -a ~/.config/starship.toml
+	echo '# Shows the hostname' | sudo tee -a ~/.config/starship.toml
+	echo '[hostname]' | sudo tee -a ~/.config/starship.toml
+	echo 'ssh_only = false' | sudo tee -a ~/.config/starship.toml
+	echo "format = 'host=>[$$hostname](bold yellow) '" | sudo tee -a ~/.config/starship.toml
+	echo 'disabled = false' | sudo tee -a ~/.config/starship.toml
+	echo '' | sudo tee -a ~/.config/starship.toml
+	echo '# Shows current directory' | sudo tee -a ~/.config/starship.toml
+	echo '[directory]' | sudo tee -a ~/.config/starship.toml
+	echo 'truncation_length = 70' | sudo tee -a ~/.config/starship.toml
+	echo "truncation_symbol = '…/'" | sudo tee -a ~/.config/starship.toml
+	echo "home_symbol = '󰋜 ~'" | sudo tee -a ~/.config/starship.toml
+	echo "read_only_style = '197'" | sudo tee -a ~/.config/starship.toml
+	echo "read_only = '  '" | sudo tee -a ~/.config/starship.toml
+	echo "format = 'at [$$path]($$style)[$$read_only]($$read_only_style) '" | sudo tee -a ~/.config/starship.toml
+	echo '' | sudo tee -a ~/.config/starship.toml
+	echo '# Shows current git branch' | sudo tee -a ~/.config/starship.toml
+	echo '[git_branch]' | sudo tee -a ~/.config/starship.toml
+	echo "symbol = ''" | sudo tee -a ~/.config/starship.toml
+	echo "format = 'via [$$symbol$$branch]($$style)'" | sudo tee -a ~/.config/starship.toml
+	echo "# truncation_length = 4" | sudo tee -a ~/.config/starship.toml
+	echo "truncation_symbol = '…/'" | sudo tee -a ~/.config/starship.toml
+	echo "style = 'bold green'" | sudo tee -a ~/.config/starship.toml
+	echo '' | sudo tee -a ~/.config/starship.toml
+	echo '# Shows current git status' | sudo tee -a ~/.config/starship.toml
+	echo '[git_status]' | sudo tee -a ~/.config/starship.toml
+	echo "format = '([ \( $$all_status$$ahead_behind\)]($$style) )'" | sudo tee -a ~/.config/starship.toml
+	echo "style = 'bold green'" | sudo tee -a ~/.config/starship.toml
+	echo "conflicted = '🏳'" | sudo tee -a ~/.config/starship.toml
+	echo "up_to_date = ''" | sudo tee -a ~/.config/starship.toml
+	echo "untracked = ' '" | sudo tee -a ~/.config/starship.toml
+	echo "ahead = '⇡\$${count}'" | sudo tee -a ~/.config/starship.toml
+	echo "diverged = '⇕⇡\$${ahead_count}⇣\$${behind_count}'" | sudo tee -a ~/.config/starship.toml
+	echo "behind = '⇣\$${count}'" | sudo tee -a ~/.config/starship.toml
+	echo "stashed = ' '" | sudo tee -a ~/.config/starship.toml
+	echo "modified = ' '" | sudo tee -a ~/.config/starship.toml
+	echo "staged = '[++\(\$$count\)](green)'" | sudo tee -a ~/.config/starship.toml
+	echo "renamed = '襁 '" | sudo tee -a ~/.config/starship.toml
+	echo "deleted = ' '" | sudo tee -a ~/.config/starship.toml
+	echo '' | sudo tee -a ~/.config/starship.toml
+	echo '# Shows kubernetes context and namespace' | sudo tee -a ~/.config/starship.toml
+	echo '[kubernetes]' | sudo tee -a ~/.config/starship.toml
+	echo "format = 'via [󱃾 \$$context\(\$$namespace\)](bold purple) '" | sudo tee -a ~/.config/starship.toml
+	echo 'disabled = false' | sudo tee -a ~/.config/starship.toml
+	echo '' | sudo tee -a ~/.config/starship.toml
+	echo '# ---' | sudo tee -a ~/.config/starship.toml
+	echo '' | sudo tee -a ~/.config/starship.toml
+	echo '[package]' | sudo tee -a ~/.config/starship.toml
+	echo 'symbol = "󰏗 "' | sudo tee -a ~/.config/starship.toml
+	echo '' | sudo tee -a ~/.config/starship.toml
+	echo '[pijul_channel]' | sudo tee -a ~/.config/starship.toml
+	echo 'symbol = " "' | sudo tee -a ~/.config/starship.toml
+	echo '' | sudo tee -a ~/.config/starship.toml
+	echo '[python]' | sudo tee -a ~/.config/starship.toml
+	echo 'symbol = " "' | sudo tee -a ~/.config/starship.toml
+	echo '' | sudo tee -a ~/.config/starship.toml
+	echo '[rlang]' | sudo tee -a ~/.config/starship.toml
+	echo 'symbol = "󰟔 "' | sudo tee -a ~/.config/starship.toml
+	echo '' | sudo tee -a ~/.config/starship.toml
+	echo '[ruby]' | sudo tee -a ~/.config/starship.toml
+	echo 'symbol = " "' | sudo tee -a ~/.config/starship.toml
+	echo '' | sudo tee -a ~/.config/starship.toml
+	echo '[rust]' | sudo tee -a ~/.config/starship.toml
+	echo 'symbol = " "' | sudo tee -a ~/.config/starship.toml
+	echo '' | sudo tee -a ~/.config/starship.toml
+	echo '[scala]' | sudo tee -a ~/.config/starship.toml
+	echo 'symbol = " "' | sudo tee -a ~/.config/starship.toml
