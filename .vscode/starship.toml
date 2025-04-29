@@ -37,17 +37,19 @@ disabled = false
 
 # This is the default symbols table.
 [os.symbols]
+
 Debian = ""
 Kali = ""
 Linux = "🐧"
 Ubuntu = "󰕈"
+Raspbian = "🍓"
 Windows = "🪟"
 
 # ---
 
 # Shows the username
 [username]
-style_user = 'white underline'
+style_user = 'white'
 style_root = 'blue'
 format = '[$user]($style) '
 disabled = false
@@ -180,6 +182,7 @@ format = '[$indicator]($style) '
 
 symbol = '🔴'
 success_symbol = '🟢'
+sigint_symbol = "🟡"
 format = '$symbol$maybe_int($style) '
 map_symbol = true
 disabled = false
