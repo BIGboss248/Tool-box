@@ -2,8 +2,8 @@
 
 add_newline = false
 command_timeout = 1000
-format = """$container$os$username $battery $hostname $localip $netns $git_branch $git_status $docker_context $kubernetes $nodejs $dart $golang
-$shell $directory
+format = """$container$os$username$battery$hostname$localip$netns$git_branch$git_status$docker_context$kubernetes$nodejs$dart$golang
+$shell$status$directory
 └─> """
 
 # Drop ugly default prompt characters
@@ -31,7 +31,7 @@ threshold = 50
 style = 'bold yellow'
 
 [os]
-format = '[$symbol]() '
+format = '[$symbol]()  '
 disabled = false
 
 
@@ -68,7 +68,7 @@ truncation_symbol = '…/'
 home_symbol = '󰋜 ~'
 # read_only_style = '197'
 read_only = '🔒'
-format = 'at [$path]($style)[$read_only]($read_only_style) '
+format = '[$path]($style)[$read_only]($read_only_style) '
 
 # Shows current git branch
 [git_branch]
@@ -140,8 +140,9 @@ format = 'via [$symbol($version )($mod_version )]($style)'
 
 [localip]
 ssh_only = false
-format = '@[$localipv4](white) '
+format = '[@$localipv4](#9966ff) '
 disabled = false
+
 
 [netns]
 disabled = false
@@ -173,12 +174,12 @@ powershell_indicator = '󰨊'
 unknown_indicator = 'mystery shell'
 style = 'cyan bold'
 disabled = false
-format = '[$indicator]($style)'
+format = '[$indicator]($style) '
 
 [status]
 
 symbol = '🔴'
 success_symbol = '🟢'
-format = '$symbol'
+format = '$symbol$maybe_int($style) '
 map_symbol = true
 disabled = false
