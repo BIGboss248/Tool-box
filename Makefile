@@ -223,5 +223,5 @@ starship:
 	curl -sS https://starship.rs/install.sh | sudo sh
 	echo 'eval "$$(starship init bash)"' >> ~/.bashrc
 	wget https://raw.githubusercontent.com/BIGboss248/Tool-box/refs/heads/main/.vscode/starship.toml
-	mkdir -p ~/.config && sudo mv ./vscode/starship.toml ~/.config/starship.toml
+	mkdir -p ~/.config && sudo mv ./starship.toml ~/.config/starship.toml
 	export STARSHIP_CONFIG=~/example/non/default/path/starship.toml
