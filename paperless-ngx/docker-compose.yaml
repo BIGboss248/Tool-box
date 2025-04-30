@@ -1,0 +1,55 @@
+#! Set database env variables before running the container
+services:
+  broker:
+    image: docker.io/library/redis:7
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 3s
+
+  db:
+    image: docker.io/library/postgres:17
+    restart: unless-stopped
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+    # environment:
+    #   POSTGRES_DB: paperless
+    #   POSTGRES_USER: paperless
+    #   POSTGRES_PASSWORD:
+    #   paperless
+
+  webserver:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    restart: unless-stopped
+    # user: root # Requiered if specified more than one language
+    depends_on:
+      - db
+      - broker
+    ports:
+      - "8000:8000"
+    volumes:
+      - "$Home/OneDrive/My Software/Paperless/data:/usr/src/paperless/data"
+      - $Home/OneDrive/My Software/Paperless/media:/usr/src/paperless/media
+      - $Home/OneDrive/My Software/Paperless/export:/usr/src/paperless/export
+      - $Home/OneDrive/My Software/Paperless/consume:/usr/src/paperless/consume
+    env_file: docker-compose.env
+    environment:
+      PAPERLESS_REDIS: redis://broker:6379
+      PAPERLESS_DBHOST: db
+    healthcheck:
+      test: ["CMD", "arg"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
