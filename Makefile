@@ -191,29 +191,13 @@ certbot_nginx: certbot_cloudflare nginx
 
 node_exporter:
 	sudo iptables -I INPUT -p tcp -j ACCEPT --dport 9100
-	if [ -f /usr/local/bin/node_exporter ]; then \
-		echo -e "\e[32mNode Exporter already installed\e[0m"; \
-	else \
-	sudo wget https://github.com/prometheus/node_exporter/releases/download/v1.9.0/node_exporter-1.9.0.linux-$(arch).tar.gz; \
-	sudo tar xvfz node_exporter-1.9.0.linux-$(arch).tar.gz; \
-	sudo cp node_exporter-1.9.0.linux-$(arch)/node_exporter /usr/local/bin/; \
+	sudo wget https://github.com/prometheus/node_exporter/releases/download/v1.9.0/node_exporter-1.9.0.linux-$(arch).tar.gz
+	sudo tar xvfz node_exporter-1.9.0.linux-$(arch).tar.gz
+	sudo mv node_exporter-1.9.0.linux-$(arch)/node_exporter /usr/local/bin/
 	sudo rm -rf node_exporter-1.9.0.linux-$(arch) node_exporter-1.9.0.linux-$(arch).tar.gz; \
 	fi
-	if [ -f /etc/systemd/system/node_exporter.service ]; then \
-		echo -e "\e[32mNode Exporter service already exists\e[0m"; \
-	else \
-		sudo touch /etc/systemd/system/node_exporter.service; \
-	echo "[Unit]" | sudo tee /etc/systemd/system/node_exporter.service; \
-	echo "Description=Node Exporter" | sudo tee -a /etc/systemd/system/node_exporter.service; \
-	echo "After=network.target" | sudo tee -a /etc/systemd/system/node_exporter.service; \
-	echo "" | sudo tee -a /etc/systemd/system/node_exporter.service; \
-	echo "[Service]" | sudo tee -a /etc/systemd/system/node_exporter.service; \
-	echo "Type=simple" | sudo tee -a /etc/systemd/system/node_exporter.service; \
-	echo "ExecStart=/usr/local/bin/node_exporter" | sudo tee -a /etc/systemd/system/node_exporter.service; \
-	echo "" | sudo tee -a /etc/systemd/system/node_exporter.service; \
-	echo "[Install]" | sudo tee -a /etc/systemd/system/node_exporter.service; \
-	echo "WantedBy=multi-user.target" | sudo tee -a /etc/systemd/system/node_exporter.service; \
-	fi
+	sudo wget https://raw.githubusercontent.com/BIGboss248/Tool-box/refs/heads/main/.vscode/node_exporter.service
+	sudo mv node_exporter.service /etc/systemd/system/node_exporter.service
 	sudo systemctl daemon-reload
 	sudo systemctl enable node_exporter
 	sudo systemctl start node_exporter
@@ -225,3 +209,5 @@ starship:
 	wget https://raw.githubusercontent.com/BIGboss248/Tool-box/refs/heads/main/.vscode/starship.toml
 	mkdir -p ~/.config && sudo mv ./starship.toml ~/.config/starship.toml
 	export STARSHIP_CONFIG=~/example/non/default/path/starship.toml
+
+setup: vscode_extention starship node_exporter
