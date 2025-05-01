@@ -3,7 +3,7 @@
 add_newline = false
 command_timeout = 1000
 # $nodejs$dart$golang
-format = """$container$os$username$battery$hostname$localip$netns$git_branch$git_status$docker_context$kubernetes
+format = """$container$os$username$battery$hostname$localip$netns$git_branch$git_status$docker_context$kubernetes$nodejs$dart$golang$python
 $shell$status$directory
 └─> """
 
@@ -116,8 +116,24 @@ format = 'via [📦 $version](208 bold) '
 symbol = ""
 
 [python]
-symbol = ""
-pyenv_version_name = true
+symbol = "(yellow)"
+pyenv_version_name = false
+python_binary = [["python"], ["python3"], ["python2"]]
+detect_files = [
+    "requirements.txt",
+    ".python-version",
+    "pyproject.toml",
+    "Pipfile",
+    "tox.ini",
+    "setup.py",
+    "__init__.py",
+    ".pylintrc",
+]
+detect_env_vars = ["VIRTUAL_ENV"]
+detect_extensions = ["py", "ipynb"]
+format = "[${symbol}](yellow bold)[$version_format](yellow bold)[$virtualenv](cyan bold)"
+version_format = "${raw} "
+pyenv_prefix = "pyenv "
 
 [rlang]
 symbol = "󰟔"
@@ -141,6 +157,21 @@ version_format = "${raw}"
 
 [golang]
 format = 'via [$symbol($version )($mod_version )]($style)'
+detect_extensions = ["go"]
+detect_files = [
+    "go.mod",
+    "go.sum",
+    "go.work",
+    "glide.yaml",
+    "Gopkg.yml",
+    "Gopkg.lock",
+    ".go-version",
+]
+detect_folders = ["Godeps"]
+disabled = false
+not_capable_style = "bold cyan"
+version_format = "v${raw}"
+symbol = ""
 
 [localip]
 ssh_only = false
