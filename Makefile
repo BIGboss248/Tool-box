@@ -127,7 +127,7 @@ open_ports:	# make open_ports port=80
 	sudo iptables -I INPUT -p tcp -j ACCEPT --dport $(PORT)
 
 vscode_extention:
-	code --install-extension ms-azuretools.vscode-docker
+	code --install-extension ms-azuretools.vscode-containers
 	code --install-extension ms-kubernetes-tools.vscode-kubernetes-tools
 	code --install-extension ms-vscode.makefile-tools
 	code --install-extension aaron-bond.better-comments
