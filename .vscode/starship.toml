@@ -2,7 +2,8 @@
 
 add_newline = false
 command_timeout = 1000
-format = """$container$os$username$battery$hostname$localip$netns$git_branch$git_status$docker_context$kubernetes$nodejs$dart$golang
+# $nodejs$dart$golang
+format = """$container$os$username$battery$hostname$localip$netns$git_branch$git_status$docker_context$kubernetes
 $shell$status$directory
 └─> """
 
@@ -82,17 +83,17 @@ style = 'bold green'
 [git_status]
 format = '([\[$all_status$ahead_behind\]]($style) )'
 style = 'bold green'
-conflicted = '='
+conflicted = 'conflicted '
 up_to_date = ''
-untracked = '?'
-ahead = '⇡${count}'
-diverged = '⇕⇡${ahead_count}⇣${behind_count}'
-behind = '⇣${count}'
-stashed = '+'
-modified = '!'
-staged = '[++\($count\)](green)'
-renamed = '»'
-deleted = ''
+untracked = 'untracked '
+ahead = '⇡${count} '
+diverged = '⇕⇡${ahead_count}⇣${behind_count} '
+behind = '⇣${count} '
+stashed = 'stashed '
+modified = 'modified '
+staged = '[++\($count\)](green) '
+renamed = 'renamed '
+deleted = 'deleted '
 
 [docker_context]
 disabled = false
@@ -131,11 +132,12 @@ symbol = ""
 symbol = ""
 
 [dart]
-format = '[🎯 $version](white) '
+format = '[🎯$version](blue) '
 detect_files = ["pubspec.yaml", "pubspec.yml", "pubspec.lock"]
 disabled = false
 style = "bold blue"
 symbol = "🎯 "
+version_format = "${raw}"
 
 [golang]
 format = 'via [$symbol($version )($mod_version )]($style)'
@@ -168,11 +170,11 @@ disabled = false
 version_format = "v"
 
 [shell]
-fish_indicator = '󰈺'
-bash_indicator = ''
-cmd_indicator = ''
-zsh_indicator = ''
-powershell_indicator = '󰨊'
+fish_indicator = 'FISH'
+bash_indicator = 'BASH'
+cmd_indicator = 'CMD'
+zsh_indicator = 'ZSH'
+powershell_indicator = 'PS'
 unknown_indicator = 'mystery shell'
 style = 'cyan bold'
 disabled = false
@@ -183,6 +185,6 @@ format = '[$indicator]($style) '
 symbol = '🔴'
 success_symbol = '🟢'
 sigint_symbol = "🟡"
-format = '$symbol$maybe_int($style) '
+format = '$symbol($style) '
 map_symbol = true
 disabled = false
