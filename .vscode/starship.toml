@@ -246,8 +246,8 @@ detect_files = ["CMakeLists.txt", "CMakeCache.txt"]
 [cmd_duration]
 show_notifications = false
 show_milliseconds = true
-min_time_to_notify = 0
-min_time = 0
+min_time_to_notify = 45000
+min_time = 2000
 format = "$duration "
 disabled = false
 
