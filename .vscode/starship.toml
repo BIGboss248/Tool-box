@@ -244,7 +244,7 @@ disabled = false
 detect_files = ["CMakeLists.txt", "CMakeCache.txt"]
 
 [cmd_duration]
-show_notifications = true
+show_notifications = false
 show_milliseconds = true
 min_time_to_notify = 0
 min_time = 0
