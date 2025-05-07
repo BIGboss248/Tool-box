@@ -158,7 +158,6 @@ webmin:
 	sudo passwd root
 
 nginx:
-	code --install-extension ahmadalli.vscode-nginx-conf
 	if nginx -v; then \
 		echo -e "\e[32mNginx already installed\e[0m"; \
 	else \
