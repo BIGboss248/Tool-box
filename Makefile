@@ -10,6 +10,9 @@ kompose_download_link=https://github.com/kubernetes/kompose/releases/download/v1
 
 ssr:
 	sudo iptables -I INPUT -p tcp -j ACCEPT --dport $(PORT)
+	sudo apt install iptables-persistent
+	sudo bash -c iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
+	sudo netfilter-persistent save
 	wget https://raw.githubusercontent.com/teddysun/shadowsocks_install/master/shadowsocksR.sh
 	sudo chmod +x shadowsocksR.sh
 	sudo apt install gcc
@@ -65,6 +68,11 @@ docker:
 		code --install-extension ms-azuretools.vscode-docker; \
 		echo -e "\e[32mFor vscode extentions reboot is needed\e[0m"; \
 		sudo iptables -I FORWARD -p tcp -j ACCEPT -i docker0; \
+		sudo apt install iptables-persistent; \
+		sudo bash -c iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null; \
+		sudo netfilter-persistent save	sudo apt install iptables-persistent; \
+		sudo bash -c iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null; \
+		sudo netfilter-persistent save; \
 	fi
 
 minikube: kubernetes
@@ -125,6 +133,9 @@ kubeadm: kubernetes
 
 open_ports:	# make open_ports port=80
 	sudo iptables -I INPUT -p tcp -j ACCEPT --dport $(PORT)
+	sudo apt install iptables-persistent
+	sudo bash -c iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
+	sudo netfilter-persistent save
 
 vscode_extention:
 	code --install-extension ms-azuretools.vscode-containers
@@ -187,9 +198,15 @@ certbot_nginx: certbot_cloudflare nginx
 	sudo iptables -I INPUT -p tcp -j ACCEPT --dport 443
 	sudo certbot certonly --dns-cloudflare --agree-tos --no-eff-email --dns-cloudflare --dns-cloudflare-credentials ~/.cloudflare/credentials.ini -d $(DOMAIN)
 	sudo certbot renew --dry-run
+	sudo apt install iptables-persistent
+	sudo bash -c iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
+	sudo netfilter-persistent save
 
 node_exporter:
 	sudo iptables -I INPUT -p tcp -j ACCEPT --dport 9100
+	sudo apt install iptables-persistent
+	sudo bash -c iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
+	sudo netfilter-persistent save
 	sudo wget https://github.com/prometheus/node_exporter/releases/download/v1.9.0/node_exporter-1.9.0.linux-$(arch).tar.gz
 	sudo tar xvfz node_exporter-1.9.0.linux-$(arch).tar.gz
 	sudo mv node_exporter-1.9.0.linux-$(arch)/node_exporter /usr/local/bin/
