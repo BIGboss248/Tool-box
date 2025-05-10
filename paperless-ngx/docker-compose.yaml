@@ -1,6 +1,8 @@
 #! Set database env variables before running the container
 services:
   broker:
+    container_name: paperless-redis
+    hostname: paperless-redis
     image: docker.io/library/redis:7
     restart: unless-stopped
     volumes:
@@ -13,6 +15,8 @@ services:
       timeout: 3s
 
   db:
+    container_name: paperless-db
+    hostname: paperless-db
     image: docker.io/library/postgres:17
     restart: unless-stopped
     volumes:
@@ -34,6 +38,8 @@ services:
     #   paperless
 
   webserver:
+    container_name: paperless-webserver
+    hostname: paperless-webserver
     image: ghcr.io/paperless-ngx/paperless-ngx:latest
     restart: unless-stopped
     # user: root # Requiered if specified more than one language
