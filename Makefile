@@ -226,4 +226,7 @@ starship:
 	mkdir -p ~/.config && sudo mv ./starship.toml ~/.config/starship.toml
 	export STARSHIP_CONFIG=~/example/non/default/path/starship.toml
 
-setup: vscode_extention starship node_exporter
+fast_fetch:
+	sudo apt install fastfetch
+
+setup: vscode_extention starship node_exporter fast_fetch
