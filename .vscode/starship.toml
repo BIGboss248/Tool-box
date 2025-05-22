@@ -1,16 +1,85 @@
 # ~/.config/starship.toml
 
-add_newline = false
+add_newline = true
 command_timeout = 1000
-# $nodejs$dart$golang
-format = """$container$os$username$battery$hostname$localip$netns$git_branch$git_status$docker_context$kubernetes$nodejs$dart$golang$python
-$shell$status$directory
-└─> """
+# Modules enabled but not used $nodejs$dart$golang$status
+format = """$container$os$username$battery$hostname$localip$netns$git_branch$git_status$git_state$cmd_duration$docker_context$kubernetes$cpp$c$cmake$nodejs$dart$golang$python
+$shell$directory
+$character"""
 
-# Drop ugly default prompt characters
+[cmake]
+version_format = "v"
+symbol = "△ "
+style = "bold blue"
+format = "via [$symbol($version )]($style)"
+disabled = false
+detect_folders = []
+detect_files = ["CMakeLists.txt", "CMakeCache.txt"]
+detect_extensions = []
+
+[cpp]
+version_format = "v"
+symbol = "C++ "
+style = "149 bold"
+format = "[$symbol($version(-$name) )]($style)"
+disabled = false
+detect_folders = []
+detect_files = []
+detect_extensions = [
+    "cpp",
+    "cc",
+    "cxx",
+    "c++",
+    "hpp",
+    "hh",
+    "hxx",
+    "h++",
+    "tcc",
+]
+commands = [
+    [
+        "c++",
+        "--version",
+    ],
+    [
+        "g++",
+        "--version",
+    ],
+    [
+        "clang++",
+        "--version",
+    ],
+]
+
+[c]
+version_format = "v"
+symbol = "C "
+style = "149 bold"
+format = "via [$symbol($version(-$name) )]($style)"
+disabled = false
+detect_folders = []
+detect_files = []
+detect_extensions = ["c", "h"]
+commands = [["cc", "--version"], ["gcc", "--version"], ["clang", "--version"]]
+
+
+[cmd_duration]
+show_notifications = true
+min_time_to_notify = 45000
+show_milliseconds = true
+min_time = 5000
+format = "[🕒 $duration](yellow bold) "
+disabled = false
+
 [character]
-success_symbol = ''
-error_symbol = ''
+success_symbol = "[└─>](bold green)"
+error_symbol = "[└─>](bold red)"
+disabled = false
+format = "$symbol "
+vimcmd_visual_symbol = "[└─>](bold yellow)"
+vimcmd_symbol = "[└─>](bold green)"
+vimcmd_replace_symbol = "[└─>](bold purple)"
+vimcmd_replace_one_symbol = "[└─>](bold purple)"
 
 [container]
 disabled = false
@@ -50,8 +119,8 @@ Windows = "🪟"
 
 # Shows the username
 [username]
-style_user = 'white'
-style_root = 'blue'
+style_user = 'white italic'
+style_root = '#FFD700 italic'
 format = '[$user]($style) '
 disabled = false
 show_always = true
@@ -72,6 +141,19 @@ home_symbol = '󰋜 ~'
 # read_only_style = '197'
 read_only = '🔒'
 format = '[$path]($style)[$read_only]($read_only_style) '
+
+[git_state]
+style = "bold yellow"
+revert = "REVERTING"
+rebase = "REBASING"
+merge = "MERGING"
+format = "\\([$state( $progress_current/$progress_total)]($style)\\) "
+disabled = false
+cherry_pick = "CHERRY-PICKING"
+bisect = "BISECTING"
+am_or_rebase = "AM/REBASE"
+am = "AM"
+
 
 # Shows current git branch
 [git_branch]
@@ -199,15 +281,14 @@ disabled = false
 version_format = "v${raw}"
 
 [shell]
-fish_indicator = '󰈺'
-bash_indicator = ''
-cmd_indicator = ''
-zsh_indicator = ''
-powershell_indicator = ' '
+fish_indicator = '[󰈺](#4AE8B6)'
+bash_indicator = '[](#89e051)'
+cmd_indicator = '(gray)'
+zsh_indicator = '[](brwon)'
+powershell_indicator = '[](cyan bold)'
 unknown_indicator = 'mystery shell'
-style = 'cyan bold'
 disabled = false
-format = '[$indicator]($style) '
+format = '$indicator '
 
 [status]
 
