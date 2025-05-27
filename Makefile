@@ -226,6 +226,8 @@ starship:
 	export STARSHIP_CONFIG=~/example/non/default/path/starship.toml
 
 fast_fetch:
+	sudo add-apt-repository ppa:zhangsongcui3371/fastfetch
+	sudo apt update
 	sudo apt install fastfetch
 
 setup: vscode_extention starship node_exporter fast_fetch
