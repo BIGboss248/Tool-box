@@ -211,7 +211,6 @@ node_exporter:
 	sudo tar xvfz node_exporter-1.9.0.linux-$(arch).tar.gz
 	sudo mv node_exporter-1.9.0.linux-$(arch)/node_exporter /usr/local/bin/
 	sudo rm -rf node_exporter-1.9.0.linux-$(arch) node_exporter-1.9.0.linux-$(arch).tar.gz; \
-	fi
 	sudo wget https://raw.githubusercontent.com/BIGboss248/Tool-box/refs/heads/main/.vscode/node_exporter.service
 	sudo mv node_exporter.service /etc/systemd/system/node_exporter.service
 	sudo systemctl daemon-reload
