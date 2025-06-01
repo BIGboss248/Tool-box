@@ -9,7 +9,7 @@ wazuh: docker
 	@read answer; \
 	sudo docker compose -f generate-indexer-certs.yml run --rm generator
 	sudo docker compose up --remove-orphans --force-recreate -d
-	echo "Visit wazuh dashboard at https://localhost:5601"
+	echo "Visit wazuh dashboard at https://localhost:5601 It may take a few minutes to start up"
 
 wazuh-clean:
 	echo "Are you sure you want to remove all Wazuh containers and volumes? [y/N]"
