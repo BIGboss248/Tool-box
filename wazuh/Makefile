@@ -5,8 +5,8 @@ include ../Makefile
 wazuh: docker
 	sudo sysctl -w vm.max_map_count=262144
 	code .env
-	echo "Wazuh environment variables set in .env file set all and whey done press enter to continue"
-	@read answer; \
+	echo "Change password for dashboard and API users by follow this guide:"
+	echo "https://documentation.wazuh.com/current/deployment-options/docker/wazuh-container.html#change-the-password-of-wazuh-users"
 	sudo docker compose -f generate-indexer-certs.yml run --rm generator
 	sudo docker compose up --remove-orphans --force-recreate -d
 	echo "Visit wazuh dashboard at https://localhost:5601 It may take a few minutes to start up"
