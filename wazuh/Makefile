@@ -6,7 +6,7 @@ wazuh: docker
 	sudo sysctl -w vm.max_map_count=262144
 	echo "Change password for dashboard and API users by follow this guide:"
 	echo "https://documentation.wazuh.com/current/deployment-options/docker/wazuh-container.html#change-the-password-of-wazuh-users"
-	sudo docker compose -f generate-indexer-certs.yml run --rm generator
+	sudo docker run --user root -v ./config/wazuh_indexer_ssl_certs/:/certificates/ -v ./config/certs.yml:/config/certs.yml  wazuh/wazuh-certs-generator:0.0.2
 	sudo docker compose up --remove-orphans --force-recreate -d
 	echo "Visit wazuh dashboard at https://localhost:5601 It may take a few minutes to start up"
 
