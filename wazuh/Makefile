@@ -2,6 +2,16 @@
 
 include ../Makefile
 
+help:
+	echo "wazuh_docker => Install wazuh via docker"
+	echo "wazuh_docker_clean => Remove all wazuh containers and volumes"
+	echo "wazuh_docker_change_pass => Change the password for wazuh indexer"
+	echo "wazuh_docker_api_change_password => Change the password for wazuh api"
+	echo "wazuh => Install wazuh via script"
+	echo "wazuh_password => Show the password for wazuh"
+
+.PHONY: help wazuh_docker wazuh_docker_clean wazuh_docker_change_pass wazuh_docker_api_change_password wazuh wazuh_password
+
 wazuh_docker: docker
 	sudo sysctl -w vm.max_map_count=262144
 	echo "Change password for dashboard and API users by follow this guide:"
