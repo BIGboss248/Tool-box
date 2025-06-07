@@ -65,5 +65,4 @@ wazuh:
 	sed -i "s/^enabled=1/enabled=0/" /etc/yum.repos.d/wazuh.repo
 
 wazuh_password:
-	sudo tar -O -xvf wazuh-install-files.tar
-	code wazuh-install-files/wazuh-passwords.txt
+	sudo tar -O -xvf wazuh-install-files.tar wazuh-install-files/wazuh-passwords.txt
