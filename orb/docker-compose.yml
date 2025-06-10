@@ -1,4 +1,5 @@
 ---
+#* To link to orb account run /app/orb link and open link in browser
 services:
   orb-docker:
     image: orbforge/orb:latest
