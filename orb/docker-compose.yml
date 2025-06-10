@@ -1,16 +1,20 @@
 ---
-#* To link to orb account run /app/orb link and open link in browser
+# * To link to orb account run /app/orb link and open link in browser
 services:
   orb-docker:
     image: orbforge/orb:latest
-    container_name: orb-sensor # Optional: Give the container a specific name
+    container_name: orb-sensor  # Optional: Give the container a specific name
+    # trunk-ignore(yamllint/line-length)
     # network_mode: host # Optional: alternatively you can use 'bridge' mode and map ports :7443 and :5353
     ports:
       - :7443
       - :5353
     volumes:
-      - ./orb-data:/root/.config/orb # Persists Orb configuration
-    restart: unless-stopped # Ensures Orb restarts if it stops or on system reboot
+      - ./orb-data:/root/.config/orb  # Persists Orb configuration
+    # trunk-ignore(yamllint/line-length)
+    restart: unless-stopped  # Ensures Orb restarts if it stops or on system reboot
     labels:
-      - "com.centurylinklabs.watchtower.enable=true" # Enable auto-updates with Watchtower
-      - "com.centurylinklabs.watchtower.scope=orb" # Scope for Watchtower to monitor
+      # trunk-ignore(yamllint/line-length)
+      - "com.centurylinklabs.watchtower.enable=true"  # Enable auto-updates with Watchtower
+      # trunk-ignore(yamllint/line-length)
+      - "com.centurylinklabs.watchtower.scope=orb"  # Scope for Watchtower to monitor
