@@ -8,7 +8,7 @@
 # use something like pre-commit run --from-ref origin/HEAD --to-ref HEAD
 repos:
   - repo: https://github.com/oxsecurity/megalinter
-    rev: v8.4.2 # Git tag specifying the hook, not mega-linter-runner, version
+    rev: v8.7.0 # Git tag specifying the hook, not mega-linter-runner, version
     hooks:
       - id: megalinter-full # Slower, more thorough
         stages:
@@ -44,7 +44,7 @@ repos:
 
   # Git security
   - repo: https://github.com/gitguardian/gg-shield
-    rev: v1.37.0
+    rev: v1.40.0
     hooks:
       - id: ggshield
       # - id: ggshield-iac
