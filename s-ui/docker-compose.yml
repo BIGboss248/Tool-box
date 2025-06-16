@@ -18,7 +18,7 @@ services:
     ports:
       # Panel path: /app/
       - "2095:2095" # Panel Port
-        # Subscription path: /sub/
+      # Subscription path: /sub/
       - "2096:2096" # Subscription Port
     networks:
       - my_network
