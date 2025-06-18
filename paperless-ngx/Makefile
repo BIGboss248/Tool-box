@@ -1,14 +1,14 @@
 
 include ../Makefile
 
-postgres_docker_setup:
+postgres_docker_install:
 	code docker-compose.yml
 	echo "Set env variables"
 	read -p
 	echo "Run docker compose"
 	sudo docker compose up -d
 
-sqlite_docker_setup:
+sqlite_docker_install:
 	code docker-compose-sqlite.yml
 	echo "Set env variables"
 	read -p
