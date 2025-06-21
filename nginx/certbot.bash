@@ -7,4 +7,4 @@ sudo bash -c iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
 sudo netfilter-persistent save
 sudo snap install --classic certbot
 sudo ln -s /snap/bin/certbot /usr/bin/certbot
-sudo certbot certonly --standalone --config-dir ./confdir
+sudo certbot certonly --standalone --config-dir ./ssl
