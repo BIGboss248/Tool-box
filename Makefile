@@ -216,7 +216,8 @@ node_exporter:
 	sudo systemctl daemon-reload
 	sudo systemctl enable node_exporter
 	sudo systemctl start node_exporter
-	sudo systemctl status node_exporter
+	sudo systemctl is-active node_exporter
+	sudo systemctl is-enabled node_exporter
 
 starship:
 	curl -sS https://starship.rs/install.sh | sudo sh
