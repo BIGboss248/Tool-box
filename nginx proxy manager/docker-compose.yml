@@ -25,6 +25,7 @@ services:
       - my_network
     # Default admin user
     # Email:    admin@example.com Pass: changeme
+    #* To reset password visit https://www.reddit.com/r/nginxproxymanager/comments/zm3ewq/nginx_proxy_managerlost_password_to_web_ui/
 networks:
   my_network:
     driver: bridge
