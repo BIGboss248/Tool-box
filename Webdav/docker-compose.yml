@@ -1,16 +1,16 @@
 #kics-scan disable=698ed579-b239-4f8f-a388-baa4bcb13ef8
+
+---
+
 services:
   webdav:
-    image: bytemark/webdav
-    hostname: webdav
-    container_name: webdav
-    restart: always
-    ports:
-      - :80
-    env_file:
-      - .env
-    volumes:
-      - /karing:/var/lib/dav
+    image: derkades/webdav
+    volumes: ./data:/data
+    ports: 8080:80
+    environment:
+      USERNAME: # user
+      PASSWORD: # Yo4Nup5uvDmo587P8xPpqT
+    restart: unless-stopped
     networks:
       - my_network
 networks:
