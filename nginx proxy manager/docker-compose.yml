@@ -6,6 +6,7 @@ services:
     container_name: nginx_manager
     hostname: nginx_manager
     ports:
+      #* If the contaiener is restarting it might throw bad gateway error until it is ready
       - "80:80" # Public HTTP Port
       - "443:443" # Public HTTPS Port
       - "81:81" # Admin Web Port
