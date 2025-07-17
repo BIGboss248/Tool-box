@@ -27,6 +27,9 @@ services:
     # Default admin user
     # Email:    admin@example.com Pass: changeme
     #* To reset password visit https://www.reddit.com/r/nginxproxymanager/comments/zm3ewq/nginx_proxy_managerlost_password_to_web_ui/
+    #* apt update && apt install sqlite3 -y
+    #* sqlite3 /data/database.sqlite
+    #* UPDATE user SET is_deleted=1;
 networks:
   my_network:
     driver: bridge
