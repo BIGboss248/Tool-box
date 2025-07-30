@@ -12,11 +12,18 @@ services:
     restart: unless-stopped
     environment:
       - N8N_SECURE_COOKIE=false #* This will allow http connections remove this to be more secure
+      - N8N_EDITOR_BASE_URL=https://yourdomain.com #! Set to the domain which the instance is accessible by OAth client and this will be redirect URLS meaning you put this in browser and you will see login page of n8n
     healthcheck:
       test: ["CMD-SHELL", "wget --spider http://localhost:5678"]
       interval: 30s
       timeout: 30s
       retries: 5
       start_period: 3s
+    networks:
+      - my_network
 volumes:
   n8n_data:
+networks:
+  my_network:
+    driver: bridge
+    name: my_network
