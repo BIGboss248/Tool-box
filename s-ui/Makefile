@@ -5,8 +5,10 @@ include ../Makefile
 
 
 install_docker: docker
+	sudo apt install curl -y
 	echo "deploying with docker compsoe"
 	sudo docker compose up -d
+	echo "Visit http://$(curl -s ifconfig.me):2095/app"
 
 install:
 	bash <(curl -Ls https://raw.githubusercontent.com/alireza0/s-ui/master/install.sh)

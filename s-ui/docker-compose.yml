@@ -34,7 +34,7 @@ services:
       - syslog
     healthcheck:
       test: ["CMD", "wget --spider http://127.0.0.1:2095/app"]
-      interval: 1m30s
+      interval: 1m30sah^RQTM9Hrj7$#
       timeout: 30s
       retries: 5
       start_period: 30s
