@@ -55,6 +55,8 @@ services:
       - ./consume:/usr/src/paperless/consume  # Put files here to be processed and added to paperlessNGX
     env_file: docker-compose.env
     environment:
+      #* Set the following variable to the URL of your paperless instance. needed for nginx
+      PAPERLESS_URL: https://yourdomain.com
       PAPERLESS_REDIS: redis://broker:6379
       PAPERLESS_TIKA_ENABLED: 1
       PAPERLESS_TIKA_GOTENBERG_ENDPOINT: http://gotenberg:3000

@@ -57,6 +57,8 @@ services:
       - "$Home/OneDrive/My Software/Paperless/consume:/usr/src/paperless/consume"
     env_file: docker-compose.env
     environment:
+      #* Set the following variable to the URL of your paperless instance. needed for nginx
+      PAPERLESS_URL: https://yourdomain.com
       PAPERLESS_REDIS: redis://broker:6379
       PAPERLESS_DBHOST: db
     healthcheck:
