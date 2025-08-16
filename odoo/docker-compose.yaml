@@ -3,39 +3,26 @@
 services:
   web:
     image: odoo:17.0
-    depends_on:
-      db:
-        condition: service_healthy
-    ports:
-      - "8069:8069"
     volumes:
       - odoo-web-data:/var/lib/odoo
-      - ./config/odoo.conf:/etc/odoo/odoo.conf
+      - ./config:/etc/odoo
       - ./addons:/mnt/extra-addons
-    restart: always
-    networks:
-      - odoo-net
-
-  db:
-    image: postgres:15
+    depends_on:
+      - mydb
+    ports:
+      - "8069:8069"
     environment:
-      - POSTGRES_DB=odoo
-      - POSTGRES_USER=${POSTGRES_USER:-odoo}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-strongpassword}
+      - HOST=mydb
+      - USER=odoo
+      - PASSWORD=myodoo
+  mydb:
+    image: postgres:15
     volumes:
-      - odoo-db-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U odoo"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    restart: always
-    networks:
-      - odoo-net
+      - odoo-db-data:/var/lib/postgresql/data/pgdata
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_PASSWORD=myodoo
+      - POSTGRES_USER=odoo
 volumes:
   odoo-web-data:
   odoo-db-data:
-networks:
-  odoo-net:
-    driver: bridge
