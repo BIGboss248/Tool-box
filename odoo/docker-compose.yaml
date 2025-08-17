@@ -1,28 +1,33 @@
 # Docker hub: https://hub.docker.com/_/odoo
-#TODO Test this configuration to see if it works
 services:
-  web:
+  odoo_web:
     image: odoo:17.0
+    hostname: odoo_web
+    container_name: odoo_web
+    restart: unless-stopped
     volumes:
       - odoo-web-data:/var/lib/odoo
       - ./config:/etc/odoo
       - ./addons:/mnt/extra-addons
     depends_on:
-      - mydb
+      - odoo_db
     ports:
       - "8069:8069"
     environment:
-      - HOST=mydb
-      - USER=odoo
-      - PASSWORD=myodoo
-  mydb:
+      - HOST=${POSTGRES_HOST:odoo_db}
+      - USER=${POSTGRES_USER:odoo}
+      - PASSWORD=${POSTGRES_PASS:myodoo}
+  odoo_db:
     image: postgres:15
+    hostname: odoo_db
+    container_name: odoo_db
+    restart: unless-stopped
     volumes:
       - odoo-db-data:/var/lib/postgresql/data/pgdata
     environment:
       - POSTGRES_DB=postgres
-      - POSTGRES_PASSWORD=myodoo
-      - POSTGRES_USER=odoo
+      - POSTGRES_PASSWORD=${POSTGRES_PASS:myodoo}
+      - POSTGRES_USER=${POSTGRES_USER:odoo}
 volumes:
   odoo-web-data:
   odoo-db-data:
