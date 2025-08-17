@@ -5,6 +5,7 @@ services:
     hostname: odoo_web
     container_name: odoo_web
     restart: unless-stopped
+    # user: root #* If the volumes need permisssion
     volumes:
       - odoo-web-data:/var/lib/odoo
       - ./config:/etc/odoo
@@ -14,20 +15,22 @@ services:
     ports:
       - "8069:8069"
     environment:
-      - HOST=${POSTGRES_HOST:odoo_db}
-      - USER=${POSTGRES_USER:odoo}
-      - PASSWORD=${POSTGRES_PASS:myodoo}
+      - HOST=${POSTGRES_HOST:-odoo_db}
+      - USER=${POSTGRES_USER:-odoo}
+      - PASSWORD=${POSTGRES_PASS:-myodoo}
   odoo_db:
     image: postgres:15
     hostname: odoo_db
     container_name: odoo_db
     restart: unless-stopped
+    # user: root #* If the volumes need permisssion
     volumes:
       - odoo-db-data:/var/lib/postgresql/data/pgdata
     environment:
       - POSTGRES_DB=postgres
-      - POSTGRES_PASSWORD=${POSTGRES_PASS:myodoo}
-      - POSTGRES_USER=${POSTGRES_USER:odoo}
+      - POSTGRES_PASSWORD=${POSTGRES_PASS:-myodoo}
+      - POSTGRES_USER=${POSTGRES_USER:-odoo}
+      - PGDATA=/var/lib/postgresql/data/pgdata
 volumes:
   odoo-web-data:
   odoo-db-data:
