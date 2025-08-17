@@ -23,7 +23,7 @@ services:
     hostname: odoo_db
     container_name: odoo_db
     restart: unless-stopped
-    # user: root #* If the volumes need permisssion
+    # user: root #* If the volumes need permisssionx
     volumes:
       - odoo-db-data:/var/lib/postgresql/data/pgdata
     environment:

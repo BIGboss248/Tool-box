@@ -13,6 +13,7 @@ help:
 
 xui_docker_setup: docker
 	sudo docker compose up -d
+	echo "In local deployment make sure all trafic except api.telegram.org is routed directly"
 
 xui_docker_stop:
 	sudo docker compose stop

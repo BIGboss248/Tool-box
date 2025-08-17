@@ -4,6 +4,7 @@ services:
     image: alireza7/x-ui:latest
     hostname: xui
     container_name: xui
+    # In local deployment make sure all trafic except api.telegram.org is routed directly
     ports:
       - :54321 # Web UI
       - 2096:2096 # Subscription
