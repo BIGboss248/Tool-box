@@ -233,4 +233,7 @@ fast_fetch:
 	sudo apt update
 	sudo apt install fastfetch
 
-setup: vscode_extention starship node_exporter fast_fetch
+install_neovim:
+	sudo apt install neovim
+
+setup: vscode_extention starship node_exporter fast_fetch install_neovim
