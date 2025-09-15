@@ -10,12 +10,12 @@ kompose_download_link=https://github.com/kubernetes/kompose/releases/download/v1
 
 ssr:
 	sudo iptables -I INPUT -p tcp -j ACCEPT --dport $(PORT)
-	sudo apt install iptables-persistent
+	sudo apt install iptables-persistent -y
 	sudo bash -c iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
 	sudo netfilter-persistent save
 	wget https://raw.githubusercontent.com/teddysun/shadowsocks_install/master/shadowsocksR.sh
 	sudo chmod +x shadowsocksR.sh
-	sudo apt install gcc
+	sudo apt install gcc -y
 	sudo ./shadowsocksR.sh 2>&1 | tee shadowsocksR.log
 
 kubernetes: docker
@@ -133,7 +133,7 @@ kubeadm: kubernetes
 
 open_ports:	# make open_ports port=80
 	sudo iptables -I INPUT -p tcp -j ACCEPT --dport $(PORT)
-	sudo apt install iptables-persistent
+	sudo apt install iptables-persistent -y
 	sudo bash -c iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
 	sudo netfilter-persistent save
 
@@ -157,7 +157,7 @@ zerotier_vpn:
 	sudo iptables -I FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 	sudo iptables -I FORWARD -i "$(PHY_IFACE)" -o "$(ZT_IFACE)" -m state --state RELATED,ESTABLISHED -j ACCEPT
 	sudo iptables -I FORWARD -i "$(ZT_IFACE)" -o "$(PHY_IFACE)" -j ACCEPT
-	sudo apt install iptables-persistent
+	sudo apt install iptables-persistent -y
 	sudo bash -c iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
 	sudo netfilter-persistent save
 
@@ -178,7 +178,7 @@ nginx:
 
 certbot:
 	sudo apt update
-	sudo apt install snapd
+	sudo apt install snapd -y
 	sudo snap install core; sudo snap refresh core
 	sudo snap install --classic certbot
 	sudo ln -s /snap/bin/certbot /usr/bin/certbot || true
@@ -200,13 +200,13 @@ certbot_nginx: certbot_cloudflare nginx
 	sudo iptables -I INPUT -p tcp -j ACCEPT --dport 443
 	sudo certbot certonly --dns-cloudflare --agree-tos --no-eff-email --dns-cloudflare --dns-cloudflare-credentials ~/.cloudflare/credentials.ini -d $(DOMAIN)
 	sudo certbot renew --dry-run
-	sudo apt install iptables-persistent
+	sudo apt install iptables-persistent -y
 	sudo bash -c iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
 	sudo netfilter-persistent save
 
 node_exporter:
 	sudo iptables -I INPUT -p tcp -j ACCEPT --dport 9100
-	sudo apt install iptables-persistent
+	sudo apt install iptables-persistent -y
 	sudo bash -c iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
 	sudo netfilter-persistent save
 	sudo wget https://github.com/prometheus/node_exporter/releases/download/v1.9.0/node_exporter-1.9.0.linux-$(arch).tar.gz
@@ -220,6 +220,9 @@ node_exporter:
 	sudo systemctl start node_exporter
 	sudo systemctl is-active node_exporter
 	sudo systemctl is-enabled node_exporter
+	echo -e "\e[32m=================================================================================\e[0m"
+	echo -e "\e[32mNode Exporter running on port 9100 to extract data you need to install prometheus\e[0m"
+	echo -e "\e[32m=================================================================================\e[0m"
 
 starship:
 	curl -sS https://starship.rs/install.sh | sudo sh
@@ -231,9 +234,9 @@ starship:
 fast_fetch:
 	sudo add-apt-repository ppa:zhangsongcui3371/fastfetch
 	sudo apt update
-	sudo apt install fastfetch
+	sudo apt install fastfetch -y
 
 install_neovim:
-	sudo apt install neovim
+	sudo apt install neovim -y
 
 setup: vscode_extention starship node_exporter fast_fetch install_neovim
