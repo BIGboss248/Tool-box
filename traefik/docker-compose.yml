@@ -5,7 +5,60 @@ services:
     # The official v3 Traefik docker image
     image: traefik
     # Enables the web UI and tells Traefik to listen to docker
-    command: --api.insecure=true --providers.docker --log.level=DEBUG
+    command:
+      # Enable Health check
+      - "--ping=true"
+      # Allow Dashboard
+      - "--api.insecure=true"
+
+      # Get config from docker lables
+      - "--providers.docker"
+
+      # Set log level
+      - "--log.level=INFO"
+
+      # Entrypoints
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+
+      # API & Dashboard
+      - "--api.dashboard=true"
+      - "--api.insecure=false"
+
+      # Observability with Prometheus
+      # If using a dedicated metrics entry point, define it:
+      - "--entrypoints.metrics.address=:8082"
+      # ... other command arguments ...
+      - "--metrics.prometheus=true"
+      # Optionally change the entry point metrics are exposed on (defaults to 'traefik')
+      - "--metrics.prometheus.entrypoint=metrics"
+      # Add labels to metrics for routers/services (can increase cardinality)
+      - "--metrics.prometheus.addrouterslabels=true"
+      - "--metrics.prometheus.addserviceslabels=true"
+
+      # Enable access logs
+      # ... other command arguments ...
+      - "--accesslog=true" # Enable access logs to stdout
+
+      # Optionally change format or output file (requires volume)
+      - "--accesslog.format=json"
+      - "--accesslog.filepath=./logs/access.log"
+
+      # Optionally filter logs
+      # - "--accesslog.filters.statuscodes=400-599"
+
+      # Certificates resolvers
+      ## myresolver is used for http challenge
+      - "--certificatesresolvers.myresolver.acme.email=your-email@example.com"
+      - "--certificatesresolvers.myresolver.acme.storage=acme.json"
+      # used during the challenge
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+      ## cloudflare_resolver is used for dns challenge
+      - "--certificatesresolvers.cloudflare_resolver.acme.email=your-email@example.com"
+      - "--certificatesresolvers.cloudflare_resolver.acme.storage=acme.json"
+      - "--certificatesresolvers.cloudflare_resolver.acme.dnsChallenge.provider=cloudflare"
+
     container_name: traefik
     hostname: traefik
     restart: unless-stopped
@@ -16,18 +69,25 @@ services:
       - :8080
       # The HTTPS port
       - "443:443"
+      # Prometheus port
+      - "8082:8082"
     environment:
       # CF_DNS_API_TOKEN_FILE: /run/secrets/cf_api_token # note using _FILE for docker secrets
       Domain: ${Domain}
-      CLOUDFLARE_API_KEY: ${cf_api_token}
-      CLOUDFLARE_EMAIL: ${cf_email}
-    env_file: .env # use .env
+      #// CLOUDFLARE_API_KEY: ${cf_api_token}
+      #// CLOUDFLARE_EMAIL: ${cf_email}
+      #// CF_API_KEY: ${cf_api_token}
+      CF_API_EMAIL: ${cf_email}
+      CF_DNS_API_TOKEN: ${cf_api_token}
+      CF_ZONE_API_TOKEN: ${cf_api_token}
+    #// env_file: .env # use .env
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik.yml:/traefik.yml:ro
+      #// - ./traefik.yml:/traefik.yml:ro
       - ./acme.json:/acme.json:rw
-      # - ./data/config.yml:/config.yml:ro
+      - ./logs:/logs
+      #// - ./data/config.yml:/config.yml:ro
     healthcheck:
       test: ["CMD", "traefik", "healthcheck", "--ping"]
       interval: 1m30s
