@@ -239,4 +239,45 @@ fast_fetch:
 install_neovim:
 	sudo apt install neovim -y
 
-setup: vscode_extention starship node_exporter fast_fetch install_neovim
+install-zsh:
+	@echo "🔹 Installing Zsh..."
+	@if command -v apt >/dev/null; then \
+		sudo apt update && sudo apt install -y zsh git curl; \
+	elif command -v dnf >/dev/null; then \
+		sudo dnf install -y zsh git curl; \
+	elif command -v pacman >/dev/null; then \
+		sudo pacman -Sy --noconfirm zsh git curl; \
+	else \
+		echo "❌ Unsupported package manager. Install zsh manually."; \
+		exit 1; \
+	fi
+
+zshell-set-default:
+	sudo echo "🔹 Setting Zsh as default shell..."
+	sudo chsh -s `which zsh` || true
+
+install-ohmyzsh:
+	@echo "🔹 Installing Oh My Zsh..."
+	@if [ ! -d "$$HOME/.oh-my-zsh" ]; then \
+		sh -c "$$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" || true; \
+	else \
+		echo "✅ Oh My Zsh already installed."; \
+	fi
+
+install-zshell-plugins:
+	@echo "🔹 Installing plugins..."
+	@ZSH_CUSTOM=$${ZSH_CUSTOM:-$$HOME/.oh-my-zsh/custom}; \
+	if [ ! -d "$$ZSH_CUSTOM/plugins/zsh-autosuggestions" ]; then \
+		git clone https://github.com/zsh-users/zsh-autosuggestions $$ZSH_CUSTOM/plugins/zsh-autosuggestions; \
+	fi; \
+	if [ ! -d "$$ZSH_CUSTOM/plugins/zsh-syntax-highlighting" ]; then \
+		git clone https://github.com/zsh-users/zsh-syntax-highlighting $$ZSH_CUSTOM/plugins/zsh-syntax-highlighting; \
+	fi; \
+	if ! grep -q "zsh-autosuggestions" $$HOME/.zshrc; then \
+		sed -i 's/^plugins=(\(.*\))/plugins=(\1 zsh-autosuggestions zsh-syntax-highlighting)/' $$HOME/.zshrc; \
+	fi
+	exec zsh
+
+zshell-setup: install-zsh zshell-set-default install-ohmyzsh install-zshell-plugins
+
+setup: vscode_extention starship node_exporter fast_fetch install_neovim zshell-setup
