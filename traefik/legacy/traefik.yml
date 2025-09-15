@@ -2,6 +2,14 @@ ping: {} # Enable health check
 api:
   dashboard: true
   debug: true
+metrics:
+  prometheus:
+    addRoutersLabels: true
+    addServicesLabels: true
+    entryPoint: "websecure"
+accessLog:
+  filePath: /access.log
+  format: json
 entryPoints:
   web:
     address: ":80"
@@ -31,7 +39,7 @@ certificatesResolvers:
         # Required
         #
         entryPoint: web
-  cloudflare:
+  cloudflare_resolver:
     acme:
       email: "example@gmail.com"
       storage: acme_cloudflare.json
