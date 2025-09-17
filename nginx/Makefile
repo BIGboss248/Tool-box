@@ -23,7 +23,7 @@ certbot_cloudflare_ssl_token: certbot
 	else \
 	mkdir ~/.cloudflare || true; \
 	touch ~/.cloudflare/credentials.ini; \
-	echo "dns_cloudflare_api_token = $(CLOUDFLARE_API_TOKEN)" > ~/.cloudflare/credentials.ini; \
+	echo "dns_cloudflare_api_token = $(CF_API_TOKEN)" > ~/.cloudflare/credentials.ini; \
 	chmod 600 ~/.cloudflare/credentials.ini; \
 	sudo snap install certbot-dns-cloudflare; \
 	fi
