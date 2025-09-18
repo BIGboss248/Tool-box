@@ -17,7 +17,7 @@ install_certbot:
 	sudo ln -s /snap/bin/certbot /usr/bin/certbot || true
 	sudo snap set certbot trust-plugin-with-root=ok
 
-certbot_cloudflare_ssl_token: certbot
+certbot_cloudflare_ssl_token: install_certbot
 	if [ -f ~/.cloudflare/credentials.ini ]; then \
 		echo -e "\e[32mCloudflare credentials already exist\e[0m"; \
 	else \
@@ -28,11 +28,10 @@ certbot_cloudflare_ssl_token: certbot
 	sudo snap install certbot-dns-cloudflare; \
 	fi
 
-nginx_setup_ssl_domain: certbot_cloudflare nginx
+nginx_setup_ssl_domain: certbot_cloudflare install_nginx
 	sudo iptables -I INPUT -p tcp -j ACCEPT --dport 80
 	sudo iptables -I INPUT -p tcp -j ACCEPT --dport 443
 	sudo certbot certonly --dns-cloudflare --agree-tos --no-eff-email --dns-cloudflare --dns-cloudflare-credentials ~/.cloudflare/credentials.ini -d $(DOMAIN)
-	sudo certbot renew --dry-run
 	sudo apt install iptables-persistent -y
 	sudo bash -c iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
 	sudo netfilter-persistent save
@@ -42,3 +41,7 @@ nginx_setup_ssl_domain: certbot_cloudflare nginx
 	echo -e "\e[32m=================================================================================\e[0m"
 	code /etc/nginx/sites-available/default
 	sudo systemctl restart nginx
+	echo -e "\e[32m=================================================================================\e[0m"
+	echo -e "\e[32mTesting certificate renewal\e[0m"
+	echo -e "\e[32m=================================================================================\e[0m"
+	sudo certbot renew --dry-run --dns-cloudflare-propagation-seconds 20
