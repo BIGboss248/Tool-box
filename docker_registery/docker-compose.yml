@@ -24,16 +24,6 @@ services:
       timeout: 30s
       retries: 5
       start_period: 30s
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.registery_service.loadbalancer.server.port=5000"
-      - "traefik.http.routers.registery.service=registery_service"
-      - "traefik.http.routers.registery.entrypoints=web"
-      - "traefik.http.routers.registery.rule=Host(`${Domain}`)"
-      - "traefik.http.routers.registery-secure.tls=true"
-      - "traefik.http.routers.registery-secure.entrypoints=websecure"
-      - "traefik.http.routers.registery-secure.rule=Host(`${Domain}`)"
-      - "traefik.http.routers.registery-secure.tls.certresolver=myresolver"
     networks:
       - my_network
 networks:

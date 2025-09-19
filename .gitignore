@@ -4,3 +4,6 @@ iventoy/log/log.txt
 
 megalinter-reports/
 node_modules
+
+#Ignore vscode AI rules
+.github\instructions\codacy.instructions.md
