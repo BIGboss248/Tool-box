@@ -50,14 +50,16 @@ services:
 
       # Certificates resolvers
       ## myresolver is used for http challenge
-      - "--certificatesresolvers.myresolver.acme.email=your-email@example.com"
+      - "--certificatesresolvers.myresolver.acme.email=${acme_email}"
       - "--certificatesresolvers.myresolver.acme.storage=acme.json"
+      # - "--certificatesresolvers.myresolver.acme.caServer=https://acme-staging-v02.api.letsencrypt.org/directory" # staging
       # used during the challenge
       - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
       ## cloudflare_resolver is used for dns challenge
-      - "--certificatesresolvers.cloudflare_resolver.acme.email=your-email@example.com"
+      - "--certificatesresolvers.cloudflare_resolver.acme.email=${acme_email}"
       - "--certificatesresolvers.cloudflare_resolver.acme.storage=acme.json"
       - "--certificatesresolvers.cloudflare_resolver.acme.dnsChallenge.provider=cloudflare"
+      # - "--certificatesresolvers.cloudflare_resolver.acme.caServer=https://acme-staging-v02.api.letsencrypt.org/directory" # staging
 
     container_name: traefik
     hostname: traefik
@@ -72,15 +74,16 @@ services:
       # Prometheus port
       - "8082:8082"
     environment:
-      # CF_DNS_API_TOKEN_FILE: /run/secrets/cf_api_token # note using _FILE for docker secrets
       Domain: ${Domain}
-      #// CLOUDFLARE_API_KEY: ${cf_api_token}
-      #// CLOUDFLARE_EMAIL: ${cf_email}
-      #// CF_API_KEY: ${cf_api_token}
       CF_API_EMAIL: ${cf_email}
       CF_DNS_API_TOKEN: ${cf_api_token}
       CF_ZONE_API_TOKEN: ${cf_api_token}
-    #// env_file: .env # use .env
+      acme_email: ${acme_email}
+      # CF_DNS_API_TOKEN_FILE: /run/secrets/cf_api_token # note using _FILE for docker secrets
+      #// CLOUDFLARE_API_KEY: ${cf_api_token}
+      #// CLOUDFLARE_EMAIL: ${cf_email}
+      #// CF_API_KEY: ${cf_api_token}
+    env_file: .env # use .env
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -101,7 +104,7 @@ services:
       - "traefik.http.routers.traefik-secure.tls=true"
       - "traefik.http.routers.traefik-secure.entrypoints=websecure"
       - "traefik.http.routers.traefik-secure.rule=Host(`${Domain}`)"
-      - "traefik.http.routers.traefik-secure.tls.certresolver=myresolver"
+      - "traefik.http.routers.traefik-secure.tls.certresolver=cloudflare_resolver"
       # To enable dns challenge and wild card certificate comment above and uncommect below
       # - "traefik.http.routers.traefik-secure.tls.certresolver=cloudflare"
       # - "traefik.http.routers.traefik-secure.tls.domains[0].sans=*.${Domain}"

@@ -5,9 +5,6 @@ prerequsite-makefile:
 	sudo iptables -I INPUT -p tcp -m multiport --dports 80,443 -j ACCEPT
 	sudo touch ./acme.json
 	sudo chmod 600 acme.json
-	sudo touch ./acme_cloudflare.json
-	sudo chmod 600 acme_cloudflare.json
-	touch prerequsite-makefile
 install-traefik: docker prerequsite-makefile
 	code .env
 	echo -e "\033[0;32mFill the .env file with your domain and email press enter to continue\033[0m"
