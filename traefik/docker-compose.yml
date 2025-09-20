@@ -27,13 +27,8 @@ services:
       - "--api.insecure=false"
 
       # Observability with Prometheus
-      # If using a dedicated metrics entry point, define it:
-      - "--entrypoints.metrics.address=:8082"
-      # ... other command arguments ...
       - "--metrics.prometheus=true"
-      # Optionally change the entry point metrics are exposed on (defaults to 'traefik')
-      - "--metrics.prometheus.entrypoint=metrics"
-      # Add labels to metrics for routers/services (can increase cardinality)
+      - "--metrics.prometheus.entrypoint=websecure"
       - "--metrics.prometheus.addrouterslabels=true"
       - "--metrics.prometheus.addserviceslabels=true"
 
@@ -67,18 +62,17 @@ services:
     ports:
       # The HTTP port
       - "80:80"
-      # The Web UI (enabled by --api.insecure=true)
-      - :8080
       # The HTTPS port
       - "443:443"
-      # Prometheus port
-      - "8082:8082"
+    expose:
+      - "8080" # Web UI (enabled by --api.insecure=true, can be disabled)
     environment:
       Domain: ${Domain}
       CF_API_EMAIL: ${cf_email}
       CF_DNS_API_TOKEN: ${cf_api_token}
       CF_ZONE_API_TOKEN: ${cf_api_token}
       acme_email: ${acme_email}
+      prom_metrics_path: ${prom_metrics_path}
       # CF_DNS_API_TOKEN_FILE: /run/secrets/cf_api_token # note using _FILE for docker secrets
       #// CLOUDFLARE_API_KEY: ${cf_api_token}
       #// CLOUDFLARE_EMAIL: ${cf_email}
@@ -98,6 +92,10 @@ services:
       retries: 5
       start_period: 3s
     labels:
+      # To enable dns challenge and wild card certificate comment above and uncommect below
+      # - "traefik.http.routers.traefik-secure.tls.certresolver=cloudflare"
+      # - "traefik.http.routers.traefik-secure.tls.domains[0].sans=*.${Domain}"
+      # Expose Prometheus metrics on /${prom_metrics_path} path via websecure (port 443)
       - "traefik.enable=true"
       - "traefik.http.routers.traefik.entrypoints=web"
       - "traefik.http.routers.traefik.rule=Host(`${Domain}`)"
@@ -105,11 +103,12 @@ services:
       - "traefik.http.routers.traefik-secure.entrypoints=websecure"
       - "traefik.http.routers.traefik-secure.rule=Host(`${Domain}`)"
       - "traefik.http.routers.traefik-secure.tls.certresolver=cloudflare_resolver"
-      # To enable dns challenge and wild card certificate comment above and uncommect below
-      # - "traefik.http.routers.traefik-secure.tls.certresolver=cloudflare"
-      # - "traefik.http.routers.traefik-secure.tls.domains[0].sans=*.${Domain}"
       - "traefik.http.routers.traefik-secure.tls.domains[0].main=${Domain}"
       - "traefik.http.routers.traefik-secure.service=api@internal"
+      - "traefik.http.routers.metrics.rule=Host(`${Domain}`) && Path(`/${prom_metrics_path}`)"
+      - "traefik.http.routers.metrics.entrypoints=websecure"
+      - "traefik.http.routers.metrics.service=prometheus@internal"
+      - "traefik.http.routers.metrics.tls=true"
     networks:
       - my_network
 
