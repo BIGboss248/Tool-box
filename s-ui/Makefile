@@ -9,9 +9,19 @@ install_docker: docker
 	echo "deploying with docker compsoe"
 	sudo docker compose up -d
 	echo "Visit http://$(curl -s ifconfig.me):2095/app"
+	echo -e "\e[32m====================================================================================================\e[0m"
+	echo -e "\e[32mOPEN ANY PORT YOU WANT TO WORK WITH\e[0m"
+	echo -e "\e[32m====================================================================================================\e[0m"
+# 	sudo iptables -I INPUT -p tcp -j ACCEPT
+# 	sudo iptables -I INPUT -p udp -j ACCEPT
 
 install:
 	bash <(curl -Ls https://raw.githubusercontent.com/alireza0/s-ui/master/install.sh)
+	echo -e "\e[32m====================================================================================================\e[0m"
+	echo -e "\e[32mOPEN ANY PORT YOU WANT TO WORK WITH\e[0m"
+	echo -e "\e[32m====================================================================================================\e[0m"
+# 	sudo iptables -I INPUT -p tcp -j ACCEPT
+# 	sudo iptables -I INPUT -p udp -j ACCEPT
 
 uninstall:
 	sudo systemctl disable s-ui  --now
