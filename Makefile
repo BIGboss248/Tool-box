@@ -241,7 +241,11 @@ install-zshell-plugins:
 		sed -i 's/^plugins=(\(.*\))/plugins=(\1 zsh-autosuggestions zsh-syntax-highlighting)/' $$HOME/.zshrc; \
 	fi
 	exec zsh
+install-zshell-starship:
+	@echo "🔹 Installing Starship prompt..."
+	echo '# ~/.zshrc' >> $$HOME/.zshrc
+	echo 'eval "$$(starship init zsh)"' >> $$HOME/.zshrc
 
-zshell-setup: install-zsh zshell-set-default install-ohmyzsh install-zshell-plugins
+zshell-setup: install-zsh zshell-set-default install-ohmyzsh install-zshell-plugins install-zshell-starship
 
 setup: vscode_extention starship node_exporter fast_fetch install_neovim zshell-setup
