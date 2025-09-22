@@ -169,10 +169,10 @@ webmin:
 	sudo passwd root
 
 node_exporter:
-	sudo iptables -I INPUT -p tcp -j ACCEPT --dport 9100
-	sudo apt install iptables-persistent -y
-	sudo bash -c iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
-	sudo netfilter-persistent save
+# 	sudo iptables -I INPUT -p tcp -j ACCEPT --dport 9100
+# 	sudo apt install iptables-persistent -y
+# 	sudo bash -c iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null
+# 	sudo netfilter-persistent save
 	sudo wget https://github.com/prometheus/node_exporter/releases/download/v1.9.0/node_exporter-1.9.0.linux-$(arch).tar.gz
 	sudo tar xvfz node_exporter-1.9.0.linux-$(arch).tar.gz
 	sudo mv node_exporter-1.9.0.linux-$(arch)/node_exporter /usr/local/bin/
@@ -184,9 +184,9 @@ node_exporter:
 	sudo systemctl start node_exporter
 	sudo systemctl is-active node_exporter
 	sudo systemctl is-enabled node_exporter
-	echo -e "\e[32m=================================================================================\e[0m"
-	echo -e "\e[32mNode Exporter running on port 9100 to extract data you need to install prometheus\e[0m"
-	echo -e "\e[32m=================================================================================\e[0m"
+	echo -e "\e[32m====================================================================================================\e[0m"
+	echo -e "\e[32mNode Exporter running on port 9100 to extract data you need to install prometheus and open port 9100\e[0m"
+	echo -e "\e[32m====================================================================================================\e[0m"
 
 starship:
 	curl -sS https://starship.rs/install.sh | sudo sh
