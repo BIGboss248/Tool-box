@@ -240,7 +240,6 @@ install-zshell-plugins:
 	if ! grep -q "zsh-autosuggestions" $$HOME/.zshrc; then \
 		sed -i 's/^plugins=(\(.*\))/plugins=(\1 zsh-autosuggestions zsh-syntax-highlighting)/' $$HOME/.zshrc; \
 	fi
-	exec zsh
 install-zshell-starship:
 	@echo "🔹 Installing Starship prompt..."
 	echo '# ~/.zshrc' >> $$HOME/.zshrc
