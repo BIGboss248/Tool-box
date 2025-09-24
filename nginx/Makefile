@@ -28,7 +28,7 @@ certbot_cloudflare_ssl_token: install_certbot
 	sudo snap install certbot-dns-cloudflare; \
 	fi
 
-nginx_setup_ssl_domain: certbot_cloudflare install_nginx
+nginx_setup_ssl_domain: certbot_cloudflare_ssl_token install_nginx
 	sudo iptables -I INPUT -p tcp -j ACCEPT --dport 80
 	sudo iptables -I INPUT -p tcp -j ACCEPT --dport 443
 	sudo certbot certonly --dns-cloudflare --agree-tos --no-eff-email --dns-cloudflare --dns-cloudflare-credentials ~/.cloudflare/credentials.ini -d $(DOMAIN)
