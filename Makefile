@@ -247,4 +247,4 @@ install-zshell-starship:
 
 zshell-setup: install-zsh zshell-set-default install-ohmyzsh install-zshell-plugins install-zshell-starship
 
-setup: vscode_extention starship node_exporter fast_fetch install_neovim zshell-setup
+setup: vscode_extention starship fast_fetch install_neovim zshell-setup
