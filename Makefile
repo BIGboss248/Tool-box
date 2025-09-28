@@ -167,6 +167,7 @@ webmin:
 	sudo apt-get install webmin --install-recommends
 	echo -e "\e[32mSetting root password to be able to login\e[0m"
 	sudo passwd root
+	echo -e "\e[32mYou can access webmin at https://your_ip_address:10000/ Check firwall and see if a port need to be opened\e[0m"
 
 node_exporter:
 # 	sudo iptables -I INPUT -p tcp -j ACCEPT --dport 9100
@@ -247,4 +248,4 @@ install-zshell-starship:
 
 zshell-setup: install-zsh zshell-set-default install-ohmyzsh install-zshell-plugins install-zshell-starship
 
-setup: vscode_extention starship fast_fetch install_neovim zshell-setup
+setup: vscode_extention starship fast_fetch install_neovim zshell-setup webmin
