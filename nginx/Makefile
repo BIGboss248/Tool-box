@@ -1,5 +1,5 @@
 
-include ../Makefile
+include ../makefiles/Makefile
 
 install_nginx:
 	if nginx -v; then \

@@ -1,7 +1,7 @@
 
 
 
-include ../Makefile
+include ../makefiles/Makefile
 
 install_script:
 	echo "What you'll need:"

@@ -1,6 +1,6 @@
 
 
-include ../Makefile
+include ../makefiles/Makefile
 
 help:
 	echo "wazuh_docker => Install wazuh via docker"

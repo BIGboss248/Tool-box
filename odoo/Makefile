@@ -1,5 +1,5 @@
 
-include ../Makefile
+include ../makefiles/Makefile
 
 install:
 	sudo apt install postgresql -y

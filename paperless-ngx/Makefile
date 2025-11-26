@@ -1,5 +1,5 @@
 
-include ../Makefile
+include ../makefiles/Makefile
 
 postgres_docker_install:
 	code docker-compose.yml
