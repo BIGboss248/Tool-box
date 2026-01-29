@@ -16,8 +16,7 @@ You can deploy adguard and adguard DOH with nginx after you deployed adguard and
 ```python
 tls:
   enabled: true
-  port_https: 0
   allow_unencrypted_doh: true
 ```
 
-leave the rest as is now you can resolve dns requests on http port so we can point nginx to adguard http port and resolve dns requests with https provided by nginx
+leave the rest as is now you can resolve dns requests on http port so we can point nginx to adguard http port and resolve dns requests with https provided by nginx on path /dns-query note adguard uses base64 DOH so querying it might not work
