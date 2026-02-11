@@ -13,6 +13,8 @@ services:
     environment:
       - N8N_SECURE_COOKIE=false #* This will allow http connections remove this to be more secure
       - N8N_EDITOR_BASE_URL=https://yourdomain.com #! Set to the domain which the instance is accessible by OAth client and this will be redirect URLS meaning you put this in browser and you will see login page of n8n
+      - GENERIC_TIMEZONE="Asia/Tehran" # Set timezone for n8n instance
+      - TZ="Asia/Tehran" # Set timezone for n8n instance
     healthcheck:
       test: ["CMD-SHELL", "wget --spider http://localhost:5678"]
       interval: 30s
