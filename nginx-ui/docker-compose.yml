@@ -1,0 +1,30 @@
+services:
+  nginx-ui:
+    image: uozi/nginx-ui:latest
+    restart: always
+    container_name: nginx-ui
+    hostname: nginx-ui
+    environment:
+      - TZ=Asia/Tehran
+    volumes:
+      - /mnt/user/appdata/nginx:/etc/nginx
+      - /mnt/user/appdata/nginx-ui:/etc/nginx-ui
+      - /var/www:/var/www
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "80:80"
+      - "443:443"
+      # - "9000:9000" #* Setup port
+    networks:
+      - my_network
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "http://localhost:80" ]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 10s
+
+networks:
+  my_network:
+    driver: bridge
+    name: my_network
