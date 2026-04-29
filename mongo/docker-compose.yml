@@ -1,17 +1,19 @@
 services:
   mongodb:
     image: mongo
-    container_name: mongodb
+    container_name: payloadDB
+    hostname: payloadDB
     restart: always
     expose:
       - 27017
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    env_file:
+      - .env
     volumes:
       - mongo_data:/data/db
     healthcheck:
-      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      # We use 'sh -c' so the shell can expand the environment variables
+      test: >
+        sh -c 'mongosh --username "$$MONGO_INITDB_ROOT_USERNAME"  --password "$$MONGO_INITDB_ROOT_PASSWORD"  --authenticationDatabase admin  --eval "db.adminCommand(\"ping\")"'
       interval: 10s
       timeout: 5s
       retries: 5
