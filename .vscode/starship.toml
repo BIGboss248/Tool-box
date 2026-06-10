@@ -3,7 +3,7 @@
 add_newline = true
 command_timeout = 1000
 # Modules enabled but not used $nodejs$dart$golang$status
-format = """$container$os$username$battery$hostname$localip$netns$git_branch$git_status$git_state$cmd_duration$docker_context$kubernetes$cpp$c$cmake$nodejs$dart$golang$python
+format = """$container$os$username$battery$hostname$localip$netns$git_branch$git_status$git_state$nodejs$cmd_duration$docker_context$kubernetes$cpp$c$cmake$dart$golang$python
 $shell$directory
 $character"""
 
@@ -280,9 +280,6 @@ detect_files = [
     "package.json",
     ".node-version",
     ".nvmrc",
-    "!bunfig.toml",
-    "!bun.lock",
-    "!bun.lockb",
 ]
 disabled = false
 version_format = "${raw}"
@@ -291,7 +288,7 @@ version_format = "${raw}"
 fish_indicator = '[󰈺](#4AE8B6)'
 bash_indicator = '[](#89e051)'
 cmd_indicator = '(gray)'
-zsh_indicator = '[](cyan)'
+zsh_indicator = '[](brwon)'
 powershell_indicator = '[](cyan bold)'
 unknown_indicator = 'mystery shell'
 disabled = false
