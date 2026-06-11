@@ -67,7 +67,6 @@ services:
     expose:
       - "8080" # Web UI (enabled by --api.insecure=true, can be disabled)
     environment:
-      Domain: ${Domain}
       CF_API_EMAIL: ${cf_email}
       CF_DNS_API_TOKEN: ${cf_api_token}
       CF_ZONE_API_TOKEN: ${cf_api_token}
@@ -91,24 +90,6 @@ services:
       timeout: 30s
       retries: 5
       start_period: 3s
-    labels:
-      # To enable dns challenge and wild card certificate comment above and uncommect below
-      # - "traefik.http.routers.traefik-secure.tls.certresolver=cloudflare"
-      # - "traefik.http.routers.traefik-secure.tls.domains[0].sans=*.${Domain}"
-      # Expose Prometheus metrics on /${prom_metrics_path} path via websecure (port 443)
-      - "traefik.enable=true"
-      - "traefik.http.routers.traefik.entrypoints=web"
-      - "traefik.http.routers.traefik.rule=Host(`${Domain}`)"
-      - "traefik.http.routers.traefik-secure.tls=true"
-      - "traefik.http.routers.traefik-secure.entrypoints=websecure"
-      - "traefik.http.routers.traefik-secure.rule=Host(`${Domain}`)"
-      - "traefik.http.routers.traefik-secure.tls.certresolver=cloudflare_resolver"
-      - "traefik.http.routers.traefik-secure.tls.domains[0].main=${Domain}"
-      - "traefik.http.routers.traefik-secure.service=api@internal"
-      - "traefik.http.routers.metrics.rule=Host(`${Domain}`) && Path(`/${prom_metrics_path}`)"
-      - "traefik.http.routers.metrics.entrypoints=websecure"
-      - "traefik.http.routers.metrics.service=prometheus@internal"
-      - "traefik.http.routers.metrics.tls=true"
     networks:
       - my_network
 
