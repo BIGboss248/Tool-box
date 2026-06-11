@@ -1,10 +1,12 @@
 # ~/.config/starship.toml
 
 add_newline = true
-command_timeout = 1000
-# Modules enabled but not used $nodejs$dart$golang$status
-format = """$container$os$username$battery$hostname$localip$netns$git_branch$git_status$git_state$cmd_duration$docker_context$kubernetes$cpp$c$cmake$nodejs$dart$golang$python
-$shell$directory
+command_timeout = 500
+# Modules enabled but not used $status
+format = """$container$os$username$battery$hostname$localip$netns
+$git_branch$git_status$git_state
+($nodejs$cpp$c$cmake$dart$golang$python$rust$ruby$scala$rlang$java$php$elixir$elm$erlang$haskell$julia$kotlin$lua$nim$ocaml$perl$purescript$swift$zig$cmd_duration$docker_context$kubernetes
+)$shell$directory
 $character"""
 
 [cmake]
@@ -223,16 +225,118 @@ format = "[${symbol} ${pyenv_prefix}(${version} )(\\($virtualenv\\) )]($style)"
 version_format = "${raw}"
 
 [rlang]
-symbol = "󰟔"
+symbol = "󰟔 "
+format = "[$symbol($version )]($style)"
+style = "bold blue"
+disabled = false
 
 [ruby]
-symbol = ""
+symbol = " "
+format = "[$symbol($version )]($style)"
+style = "bold red"
+disabled = false
 
 [rust]
-symbol = ""
+symbol = " "
+format = "[$symbol($version )]($style)"
+style = "bold red"
+disabled = false
 
 [scala]
-symbol = ""
+symbol = " "
+format = "[$symbol($version )]($style)"
+style = "bold red"
+disabled = false
+
+[java]
+symbol = " "
+format = "[$symbol($version )]($style)"
+style = "bold red"
+disabled = false
+
+[php]
+symbol = " "
+format = "[$symbol($version )]($style)"
+style = "bold blue"
+disabled = false
+
+[elixir]
+symbol = " "
+format = "[$symbol($version )]($style)"
+style = "bold purple"
+disabled = false
+
+[elm]
+symbol = " "
+format = "[$symbol($version )]($style)"
+style = "bold cyan"
+disabled = false
+
+[erlang]
+symbol = " "
+format = "[$symbol($version )]($style)"
+style = "bold red"
+disabled = false
+
+[haskell]
+symbol = " "
+format = "[$symbol($version )]($style)"
+style = "bold purple"
+disabled = false
+
+[julia]
+symbol = " "
+format = "[$symbol($version )]($style)"
+style = "bold purple"
+disabled = false
+
+[kotlin]
+symbol = " "
+format = "[$symbol($version )]($style)"
+style = "bold blue"
+disabled = false
+
+[lua]
+symbol = " "
+format = "[$symbol($version )]($style)"
+style = "bold blue"
+disabled = false
+
+[nim]
+symbol = " "
+format = "[$symbol($version )]($style)"
+style = "bold yellow"
+disabled = false
+
+[ocaml]
+symbol = " "
+format = "[$symbol($version )]($style)"
+style = "bold yellow"
+disabled = false
+
+[perl]
+symbol = " "
+format = "[$symbol($version )]($style)"
+style = "bold blue"
+disabled = false
+
+[purescript]
+symbol = " "
+format = "[$symbol($version )]($style)"
+style = "bold white"
+disabled = false
+
+[swift]
+symbol = " "
+format = "[$symbol($version )]($style)"
+style = "bold #ffac45"
+disabled = false
+
+[zig]
+symbol = " "
+format = "[$symbol($version )]($style)"
+style = "bold yellow"
+disabled = false
 
 [dart]
 format = '[🎯$version](blue) '
@@ -272,6 +376,7 @@ style = 'yellow'
 symbol = '🛜 '
 format = '[$symbol$netns]($style) '
 
+
 [nodejs]
 format = '[$symbol $version](green) '
 style = "green"
@@ -280,9 +385,6 @@ detect_files = [
     "package.json",
     ".node-version",
     ".nvmrc",
-    "!bunfig.toml",
-    "!bun.lock",
-    "!bun.lockb",
 ]
 disabled = false
 version_format = "${raw}"
@@ -291,7 +393,7 @@ version_format = "${raw}"
 fish_indicator = '[󰈺](#4AE8B6)'
 bash_indicator = '[](#89e051)'
 cmd_indicator = '(gray)'
-zsh_indicator = '[](cyan)'
+zsh_indicator = '[](brwon)'
 powershell_indicator = '[](cyan bold)'
 unknown_indicator = 'mystery shell'
 disabled = false
