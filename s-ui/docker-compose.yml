@@ -7,3 +7,4 @@ services:
     volumes:
       - ./db/:/app/db/
       - ./cert/:/app/cert/
+      - /etc/letsencrypt/:/etc/letsencrypt/:ro

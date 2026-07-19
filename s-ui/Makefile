@@ -32,3 +32,11 @@ uninstall:
 
 uninstall_docker:
 	sudo docker compose down
+
+cert:
+	@if [ -z "$(DOMAIN)" ]; then \
+		echo "Please provide a DOMAIN. Example: make cert DOMAIN=example.com"; \
+		exit 1; \
+	fi
+	sudo apt update && sudo apt install -y certbot
+	sudo certbot certonly --standalone -d $(DOMAIN)
