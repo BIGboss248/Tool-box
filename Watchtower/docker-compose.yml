@@ -1,8 +1,6 @@
-#kics-scan disable=d6355c88-1e8d-49e9-b2f2-f8a1ca12c75b,1c1325ff-831d-43a1-973e-839ae57dfcc0,698ed579-b239-4f8f-a388-baa4bcb13ef8
-#Ignore kics health check since it's built in
 services:
   watchtower:
-    image: containrrr/watchtower
+    image: nickfedor/watchtower
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     restart: always
@@ -11,11 +9,20 @@ services:
     networks:
       - my_network
     environment:
-      # cron scheduling for updating
+      # Cron scheduling for updates (6-field 6-digit cron: sec min hour day month day-of-week)
       - WATCHTOWER_SCHEDULE=0 0 4 * * *
       - WATCHTOWER_CLEANUP=true
-      - DOCKER_API_VERSION=1.44
+      # Only update containers with label com.centurylinklabs.watchtower.enable=true
+      - WATCHTOWER_LABEL_ENABLE=true
+    healthcheck:
+      test: ["CMD", "/watchtower", "--health-check"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
 networks:
   my_network:
     driver: bridge
     name: my_network
+    
