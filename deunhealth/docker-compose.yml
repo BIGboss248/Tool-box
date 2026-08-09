@@ -1,0 +1,14 @@
+services:
+  deunhealth:
+    #* To restart containers if they go unhealthy, use the label
+    #$ deunhealth.restart.on.unhealthy=true
+    image: qmcgaw/deunhealth
+    container_name: deunhealth
+    network_mode: "none"
+    environment:
+      - LOG_LEVEL=info
+      - HEALTH_SERVER_ADDRESS=127.0.0.1:9999
+      - TZ=America/Montreal
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
