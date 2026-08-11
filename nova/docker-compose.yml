@@ -50,3 +50,6 @@ services:
       - NOVA_DOMAIN_EMAIL=${NOVA_DOMAIN_EMAIL:-}
       - NOVA_PANEL_PATH=${NOVA_PANEL_PATH:-}
       - NOVA_PANEL_PORT=${NOVA_PANEL_PORT:-}
+    labels:
+      - deunhealth.restart.on.unhealthy=true
+      - com.centurylinklabs.watchtower.enable=true
