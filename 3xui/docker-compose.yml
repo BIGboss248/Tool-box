@@ -43,5 +43,6 @@ services:
       # and uncomment the two lines below.
       # XUI_DB_TYPE: "postgres"
       # XUI_DB_DSN: "postgres://xui:xui@postgres:5432/xui?sslmode=disable"
+      com.centurylinklabs.watchtower.enable: true
     tty: true
     restart: unless-stopped

@@ -10,3 +10,5 @@ services:
     tty: true
     restart: unless-stopped
     entrypoint: "./entrypoint.sh"
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
