@@ -8,3 +8,5 @@ services:
       - ./db/:/app/db/
       - ./cert/:/app/cert/
       - /etc/letsencrypt/:/etc/letsencrypt/:ro
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
