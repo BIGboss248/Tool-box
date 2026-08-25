@@ -1,6 +1,6 @@
 # Compose stack from mikrotik apps section
 # This stack will expose port 2055/udp and collects traffic flow data from mikrotik routers and store it in a postgres database. Grafana is also included to visualize the data.
-#! For visualization, there might be some problem since the query is broken consult AI for fix
+#!t For visualization, there might be some problem since the query is broken consult AI for fix
 services:
   nfacctd:
     image: pmacct/nfacctd:bleeding-edge
