@@ -7,6 +7,7 @@ services:
     volumes:
       - "./db:/app/db"
       - "./cert:/app/cert"
+      - /etc/letsencrypt/:/etc/letsencrypt/:ro
     tty: true
     restart: unless-stopped
     entrypoint: "./entrypoint.sh"
