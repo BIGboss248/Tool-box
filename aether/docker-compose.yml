@@ -1,0 +1,10 @@
+services:
+  aether:
+    image: ghcr.io/cluvexstudio/aether:latest
+    container_name: aether
+    restart: unless-stopped
+    ports:
+      - 1819:1819
+    # environment:
+    #   - AETHER_PROTOCOL=masque
+    #   - AETHER_SCAN=balanced
