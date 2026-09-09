@@ -1,0 +1,19 @@
+services:
+  aether:
+    # Iran-accessible GHCR mirror alternatives:
+    # - docker.arvancloud.ir/ghcr.io/cluvexstudio/aether:latest
+    # - ghcr.m.daocloud.io/cluvexstudio/aether:latest
+    # - docker.irancdn.ir/ghcr.io/cluvexstudio/aether:latest
+    image: ghcr.m.daocloud.io/cluvexstudio/aether:latest
+    container_name: aether
+    ports:
+      - "1819:1819"
+    volumes:
+      - aether-data:/data
+    environment:
+      - AETHER_PROTOCOL=masque
+      - AETHER_SCAN=balanced
+    restart: unless-stopped
+
+volumes:
+  aether-data:
