@@ -1,5 +1,6 @@
 services:
   aether:
+    image: ghcr.io/cluvexstudio/aether:latest
     # Iran-accessible GHCR mirror alternatives:
     # - docker.arvancloud.ir/ghcr.io/cluvexstudio/aether:latest
     # - ghcr.m.daocloud.io/cluvexstudio/aether:latest
