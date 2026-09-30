@@ -1,5 +1,11 @@
 #!/bin/bash
-set -euxo pipefail
+set -euo pipefail
+
+# Ensure script is running as root
+if [ "$(id -u)" -ne 0 ]; then
+    echo "This script must be run as root. Run with sudo: sudo bash $0" >&2
+    exit 1
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -10,6 +16,16 @@ NEW_USER="amin"
 NEW_PASSWORD="YOUR_PASSWORD_HERE"
 CF_TUNNEL_TOKEN="YOUR_CLOUDFLARE_TUNNEL_TOKEN_HERE"
 
+# Helper function to wait for apt / dpkg locks on boot
+wait_for_apt_lock() {
+    echo "Waiting for apt/dpkg locks to be released..."
+    while fuser /var/lib/dpkg/lock >/dev/null 2>&1 || \
+          fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || \
+          fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+        sleep 2
+    done
+}
+
 # ==============================================================================
 # 1. CREATE USER & CONFIGURE SUDO
 # ==============================================================================
@@ -17,11 +33,12 @@ if ! id -u "$NEW_USER" >/dev/null 2>&1; then
     useradd -m -s /bin/bash "$NEW_USER"
 fi
 
-# Set the password for the user
+# Set password and add to sudo group
 echo "$NEW_USER:$NEW_PASSWORD" | chpasswd
 usermod -aG sudo "$NEW_USER"
 
 # Grant full passwordless sudo permissions
+mkdir -p /etc/sudoers.d
 echo "$NEW_USER ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/90-$NEW_USER"
 chmod 0440 "/etc/sudoers.d/90-$NEW_USER"
 
@@ -30,32 +47,35 @@ chmod 0440 "/etc/sudoers.d/90-$NEW_USER"
 # ==============================================================================
 mkdir -p /etc/ssh/sshd_config.d
 
-# Cloud images (Ubuntu/Debian) often disable password auth in /etc/ssh/sshd_config.d/*
+# Override any cloud-init or cloud-image drop-in configs disabling password auth
 if ls /etc/ssh/sshd_config.d/*.conf >/dev/null 2>&1; then
-    sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config.d/*.conf
+    sed -i 's/^[#]*PasswordAuthentication.*/PasswordAuthentication yes/g' /etc/ssh/sshd_config.d/*.conf
+    sed -i 's/^[#]*KbdInteractiveAuthentication.*/KbdInteractiveAuthentication yes/g' /etc/ssh/sshd_config.d/*.conf
 fi
 
-# Create dedicated drop-in file for password authentication
-cat <<'EOF' > /etc/ssh/sshd_config.d/01-password-auth.conf
+# Create high-priority drop-in config for password authentication (Ubuntu 24.04 compatibility)
+cat <<'EOF' > /etc/ssh/sshd_config.d/99-password-auth.conf
 PasswordAuthentication yes
 KbdInteractiveAuthentication yes
 EOF
-chmod 0644 /etc/ssh/sshd_config.d/01-password-auth.conf
+chmod 0644 /etc/ssh/sshd_config.d/99-password-auth.conf
 
-# Update main sshd_config as well
-sed -i 's/^#\?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config
-sed -i 's/^#\?KbdInteractiveAuthentication .*/KbdInteractiveAuthentication yes/' /etc/ssh/sshd_config
+# Update main sshd_config as fallback
+sed -i 's/^[#]*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+sed -i 's/^[#]*KbdInteractiveAuthentication.*/KbdInteractiveAuthentication yes/' /etc/ssh/sshd_config
 
-# Restart SSH (supports both systemd service and Ubuntu socket activation)
+# Restart SSH service/socket (Ubuntu 24.04 uses ssh.socket)
 systemctl daemon-reload
-systemctl restart ssh.socket ssh.service sshd.service 2>/dev/null || \
-systemctl restart ssh 2>/dev/null || \
-systemctl restart sshd 2>/dev/null
+systemctl restart ssh.socket || true
+systemctl restart ssh || true
+systemctl restart sshd || true
 
 # ==============================================================================
 # 3. INSTALL & CONFIGURE CLOUDFLARE TUNNEL
 # ==============================================================================
+wait_for_apt_lock
 apt-get update -y
+wait_for_apt_lock
 apt-get install -y curl
 
 # Add Cloudflare GPG key
@@ -66,8 +86,13 @@ curl -fsSL https://pkg.cloudflare.com/cloudflare-public-v2.gpg | tee /usr/share/
 echo 'deb [signed-by=/usr/share/keyrings/cloudflare-public-v2.gpg] https://pkg.cloudflare.com/cloudflared any main' | tee /etc/apt/sources.list.d/cloudflared.list
 
 # Install cloudflared
+wait_for_apt_lock
 apt-get update -y
+wait_for_apt_lock
 apt-get install -y cloudflared
 
-# Register and start the Cloudflare Tunnel systemd service
-cloudflared service install "$CF_TUNNEL_TOKEN"
+# Register and start Cloudflare Tunnel service
+cloudflared service install "$CF_TUNNEL_TOKEN" || true
+systemctl daemon-reload
+systemctl enable --now cloudflared || true
+systemctl restart cloudflared || true
