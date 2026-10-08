@@ -7,3 +7,9 @@ node_modules
 
 #Ignore vscode AI rules
 .github\instructions\codacy.instructions.md
+
+# Environment files
+.env
+traefik/acme.json
+traefik/logs/
+

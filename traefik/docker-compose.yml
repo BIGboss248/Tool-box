@@ -1,24 +1,27 @@
 #kics-scan disable=d6355c88-1e8d-49e9-b2f2-f8a1ca12c75b,1c1325ff-831d-43a1-973e-839ae57dfcc0
 services:
   traefik:
-    #* Traefik ignores starting or unhealthy containers by default
-    # The official v3 Traefik docker image
-    image: traefik
-    # Enables the web UI and tells Traefik to listen to docker
+    image: ${TRAEFIK_IMAGE:-traefik:latest}
+    container_name: traefik
+    hostname: traefik
+    restart: unless-stopped
     command:
-
-      # Enable Health check
+      # Healthcheck
       - "--ping=true"
 
       # API & Dashboard
       - "--api.dashboard=true"
-      - "--api.insecure=true"
+      # Secure mode: disable insecure mode so dashboard isn't exposed publicly without auth
+      - "--api.insecure=false"
 
-      # Get config from docker lables
-      - "--providers.docker"
+      # Docker Provider
+      - "--providers.docker=true"
+      - "--providers.docker.endpoint=unix:///var/run/docker.sock"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=${DOCKER_NETWORK:-my_network}"
 
-      # Set log level
-      - "--log.level=INFO"
+      # Log Level
+      - "--log.level=${TRAEFIK_LOG_LEVEL:-INFO}"
 
       # Entrypoints
       - "--entrypoints.web.address=:80"
@@ -26,74 +29,77 @@ services:
       - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
       - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
 
-      # Observability with Prometheus
+      # Observability / Metrics
       - "--metrics.prometheus=true"
       - "--metrics.prometheus.entrypoint=websecure"
       - "--metrics.prometheus.addrouterslabels=true"
       - "--metrics.prometheus.addserviceslabels=true"
 
-      # Enable access logs
-      # ... other command arguments ...
-      - "--accesslog=true" # Enable access logs to stdout
+      # Access Logs
+      - "--accesslog=true"
+      - "--accesslog.format=${TRAEFIK_ACCESS_LOG_FORMAT:-json}"
+      - "--accesslog.filepath=/logs/access.log"
 
-      # Optionally change format or output file (requires volume)
-      - "--accesslog.format=json"
-      - "--accesslog.filepath=./logs/access.log"
-
-      # Optionally filter logs
-      # - "--accesslog.filters.statuscodes=400-599"
-
-      # Certificates resolvers
-      ## myresolver is used for http challenge
-      - "--certificatesresolvers.myresolver.acme.email=${acme_email}"
-      - "--certificatesresolvers.myresolver.acme.storage=acme.json"
-      # - "--certificatesresolvers.myresolver.acme.caServer=https://acme-staging-v02.api.letsencrypt.org/directory" # staging
-      # used during the challenge
+      # Certificate Resolvers
+      ## HTTP Challenge (Let's Encrypt HTTP-01)
+      - "--certificatesresolvers.myresolver.acme.email=${ACME_EMAIL:-}"
+      - "--certificatesresolvers.myresolver.acme.storage=/acme.json"
       - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
-      ## cloudflare_resolver is used for dns challenge
-      - "--certificatesresolvers.cloudflare_resolver.acme.email=${acme_email}"
-      - "--certificatesresolvers.cloudflare_resolver.acme.storage=acme.json"
-      - "--certificatesresolvers.cloudflare_resolver.acme.dnsChallenge.provider=cloudflare"
-      # - "--certificatesresolvers.cloudflare_resolver.acme.caServer=https://acme-staging-v02.api.letsencrypt.org/directory" # staging
+      # - "--certificatesresolvers.myresolver.acme.caServer=https://acme-staging-v02.api.letsencrypt.org/directory"
 
-    container_name: traefik
-    hostname: traefik
-    restart: unless-stopped
+      ## Cloudflare DNS Challenge (Let's Encrypt DNS-01 - supports wildcard certificates)
+      - "--certificatesresolvers.cloudflare_resolver.acme.email=${ACME_EMAIL:-}"
+      - "--certificatesresolvers.cloudflare_resolver.acme.storage=/acme.json"
+      - "--certificatesresolvers.cloudflare_resolver.acme.dnschallenge.provider=cloudflare"
+      - "--certificatesresolvers.cloudflare_resolver.acme.dnschallenge.resolvers=1.1.1.1:53,1.0.0.1:53"
+      # - "--certificatesresolvers.cloudflare_resolver.acme.caServer=https://acme-staging-v02.api.letsencrypt.org/directory"
+
     ports:
-      # The HTTP port
       - "80:80"
-      # The HTTPS port
       - "443:443"
-    expose:
-      - "8080" # Web UI (enabled by --api.insecure=true, can be disabled)
+
     environment:
-      CF_API_EMAIL: ${cf_email}
-      CF_DNS_API_TOKEN: ${cf_api_token}
-      CF_ZONE_API_TOKEN: ${cf_api_token}
-      acme_email: ${acme_email}
-      prom_metrics_path: ${prom_metrics_path}
-      # CF_DNS_API_TOKEN_FILE: /run/secrets/cf_api_token # note using _FILE for docker secrets
-      #// CLOUDFLARE_API_KEY: ${cf_api_token}
-      #// CLOUDFLARE_EMAIL: ${cf_email}
-      #// CF_API_KEY: ${cf_api_token}
-    env_file: .env # use .env
+      CF_API_EMAIL: ${CF_API_EMAIL:-}
+      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN:-}
+      CF_ZONE_API_TOKEN: ${CF_ZONE_API_TOKEN:-}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+      PROM_METRICS_PATH: ${PROM_METRICS_PATH:-}
+
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      #// - ./traefik.yml:/traefik.yml:ro
       - ./acme.json:/acme.json:rw
-      - ./logs:/logs
-      #// - ./data/config.yml:/config.yml:ro
+      - ./logs:/logs:rw
+
     healthcheck:
       test: ["CMD", "traefik", "healthcheck", "--ping"]
       interval: 1m30s
       timeout: 30s
       retries: 5
       start_period: 3s
+
     networks:
       - my_network
 
+    labels:
+      - "traefik.enable=${TRAEFIK_DASHBOARD_ENABLE:-true}"
+      - "traefik.docker.network=${DOCKER_NETWORK:-my_network}"
+
+      # Dashboard HTTPS Router
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.rule=Host(`${TRAEFIK_DASHBOARD_DOMAIN}`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.tls.certresolver=${TRAEFIK_DASHBOARD_CERTRESOLVER:-myresolver}"
+      - "traefik.http.routers.dashboard.middlewares=dashboard-auth,dashboard-compress"
+
+      # Authentication Middleware (Basic Auth from .env)
+      - "traefik.http.middlewares.dashboard-auth.basicauth.users=${TRAEFIK_BASIC_AUTH_USERS}"
+
+      # Compression Middleware
+      - "traefik.http.middlewares.dashboard-compress.compress=true"
+
 networks:
   my_network:
+    name: ${DOCKER_NETWORK:-my_network}
     driver: bridge
-    name: my_network

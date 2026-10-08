@@ -9,26 +9,46 @@ After a few trys and fails I changed the file the legacy configs are commented a
 
 Container configs are saved in my snippet section of my vscode profile
 
-## TLS certificate
+## Configuration with .env
 
-There are several ways to get an https certificate
+Configuration is managed via `.env`. A template is provided in `.env.example`:
+```bash
+cp .env.example .env
+```
 
-### HTTP challnege
+### Dashboard Access & Security
+The dashboard is exposed via HTTPS with Basic Authentication (never exposed unauthenticated on port 8080):
+- **Domain**: Set `TRAEFIK_DASHBOARD_DOMAIN` (e.g., `traefik.yourdomain.com`).
+- **Resolver**: Set `TRAEFIK_DASHBOARD_CERTRESOLVER` to `myresolver` (HTTP-01) or `cloudflare_resolver` (DNS-01).
+- **Authentication**: Set `TRAEFIK_BASIC_AUTH_USERS` in `.env` using htpasswd (`htpasswd -nb user password`). Remember to double dollar signs (`$$`) to prevent docker compose interpolation issues.
 
-For this to work you need to create an entry point on port 80 and open it on firewall note if there is a closed connection error
-this means port is closed in firewall.
-The domain should point to the server without any proxy or cdn.
+## TLS Certificate Resolvers
 
-### DNS challenge
+Traefik is configured with two certificate resolvers:
+1. `myresolver`: Standard Let's Encrypt HTTP-01 challenge on port 80 (requires port 80 open and non-proxied DNS direct to host).
+2. `cloudflare_resolver`: Let's Encrypt DNS-01 challenge via Cloudflare (supports wildcard domains and hosts behind Cloudflare CDN/proxy).
 
-For wild card certificates this option is mandatory you need to create an API key in cloudflare and then assign it in enviroment variable
-in docker.
-The cloudflare API key should have following permissions.:
-    1- Zone.Zone edit
-    2- Zone.DNS read
-IMPORTANT
-For dns to work if you use tokens with limited permissions you need to create it and place it in CF_DNS_API_TOKEN and CF_ZONE_API_TOKEN enviroment variables.
+### Cloudflare DNS Challenge Requirements
+The Cloudflare API Token needs the following permissions:
+- `Zone.Zone` - Read
+- `Zone.DNS` - Edit
 
-## Command vs traefik.yml
+Set `CF_DNS_API_TOKEN` and `CF_ZONE_API_TOKEN` in your `.env`.
 
-Traefik static configs can be done via adding commands in traefik compose file or by adding a traefik.yml to the volumes and configuring traefik there commands are easier and they work!
+## Makefile Commands
+
+The Makefile includes individual idempotent setup targets as well as an automated orchestrator:
+
+| Target | Description |
+|---|---|
+| `make setup-all` | Runs all setup targets sequentially, checking and skipping tasks already completed. |
+| `make setup-firewall` | Opens ports 80/443 in `iptables` and persists rules with `netfilter-persistent` / `iptables-save`. |
+| `make setup-certs` | Ensures `acme.json` exists with required `600` permissions. |
+| `make setup-auth` | Configures dashboard Basic Auth username & password using bcrypt/htpasswd (escapes `$$` for compose). |
+| `make setup-acme` | Sets ACME registration email or allows skipping. |
+| `make setup-cloudflare` | Configures Cloudflare DNS API token or allows skipping. |
+| `make setup-dashboard` | Prompts for dashboard domain and TLS resolver (`myresolver` vs `cloudflare_resolver`). |
+| `make report` | Displays an ASCII colored status box of all configurations and system states. |
+| `make install-traefik` | Runs `setup-all` and launches Traefik with `docker compose up -d`. |
+
+
