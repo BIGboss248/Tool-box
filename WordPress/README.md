@@ -69,7 +69,38 @@ WORDPRESS_NONCE_SALT=put_your_unique_phrase_here
 
 ---
 
-## Getting Started
+---
+
+## Quick Start with Makefile (Automated & Interactive)
+
+The included [Makefile](file:///d:/Scripts/Tool-box/WordPress/Makefile) automates initialization, generates cryptographically strong random database passwords, generates 8 unique WordPress security keys and salts, verifies Docker network dependencies, and configures `.env` interactively:
+
+```bash
+# Complete end-to-end interactive setup & container launch
+make install-wordpress
+```
+
+### Available Makefile Commands
+
+| Command | Description |
+| :--- | :--- |
+| `make setup-all` | Interactive setup for domain, cert resolver, DB user, passwords, and salts |
+| `make install-wordpress` | Runs `setup-all` and launches containers in detached mode |
+| `make setup-domain` | Configure WordPress domain name |
+| `make setup-resolver` | Select TLS resolver (`myresolver` for Let's Encrypt or `cloudflare_resolver`) |
+| `make setup-db-user` | Set database user (default: `wordpress_user`) |
+| `make setup-db-passwords` | Auto-generate strong random passwords for DB user & MySQL root |
+| `make setup-salts` | Auto-generate 8 cryptographically strong WordPress security keys & salts |
+| `make report` | Print a color-coded status box of all variables, networks, and containers |
+| `make restart` | Recreate and restart containers |
+| `make backup-db` | Generate a timestamped MySQL dump in `./backups/` |
+| `make status` | Check status of WordPress and MySQL containers |
+| `make logs` | Follow live container logs |
+| `make down` | Stop and remove WordPress stack containers |
+
+---
+
+## Manual Getting Started
 
 1. **Verify Traefik is running** on `my_network`:
    ```bash
@@ -91,3 +122,4 @@ WORDPRESS_NONCE_SALT=put_your_unique_phrase_here
 
 5. **Browse to your domain**:
    Navigate to `https://your-domain.com` to complete the initial WordPress installation wizard.
+
