@@ -20,6 +20,8 @@ Production-ready Docker Compose deployment for WordPress and MySQL 8.0, preconfi
   - `WP_POST_REVISIONS = 5`: Prevents database bloat from excessive revisions.
   - `DISALLOW_FILE_EDIT = true`: Hardens WordPress security by disabling dashboard file editing.
   - `FORCE_SSL_ADMIN = true`: Forces HTTPS across the admin dashboard.
+- **Headless & WPGraphQL JWT Authentication**:
+  - `GRAPHQL_JWT_AUTH_SECRET_KEY`: Automatically injected secret for `wp-graphql-jwt-authentication` (enabling stateless token signing for decoupled frontends like Next.js).
 - **MySQL 8.0 Optimization**:
   - Native authentication plugin compatibility and `utf8mb4` charset/collation.
   - Health checks with `service_healthy` dependency ensuring WordPress does not boot before MySQL is ready.
@@ -65,6 +67,11 @@ WORDPRESS_AUTH_SALT=put_your_unique_phrase_here
 WORDPRESS_SECURE_AUTH_SALT=put_your_unique_phrase_here
 WORDPRESS_LOGGED_IN_SALT=put_your_unique_phrase_here
 WORDPRESS_NONCE_SALT=put_your_unique_phrase_here
+
+# ==========================================
+# WPGraphQL & Headless JWT Authentication
+# ==========================================
+GRAPHQL_JWT_AUTH_SECRET_KEY=put_your_super_strong_graphql_jwt_secret_here
 ```
 
 ---
@@ -84,13 +91,14 @@ make install-wordpress
 
 | Command | Description |
 | :--- | :--- |
-| `make setup-all` | Interactive setup for domain, cert resolver, DB user, passwords, and salts |
+| `make setup-all` | Interactive setup for domain, cert resolver, DB user, passwords, salts, and JWT secret |
 | `make install-wordpress` | Runs `setup-all` and launches containers in detached mode |
 | `make setup-domain` | Configure WordPress domain name |
 | `make setup-resolver` | Select TLS resolver (`myresolver` for Let's Encrypt or `cloudflare_resolver`) |
 | `make setup-db-user` | Set database user (default: `wordpress_user`) |
 | `make setup-db-passwords` | Auto-generate strong random passwords for DB user & MySQL root |
 | `make setup-salts` | Auto-generate 8 cryptographically strong WordPress security keys & salts |
+| `make setup-jwt-secret` | Auto-generate strong 64-char secret for WPGraphQL JWT Authentication |
 | `make report` | Print a color-coded status box of all variables, networks, and containers |
 | `make restart` | Recreate and restart containers |
 | `make backup-db` | Generate a timestamped MySQL dump in `./backups/` |

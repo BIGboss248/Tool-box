@@ -1,6 +1,6 @@
 SHELL = /bin/bash
 
-.PHONY: help init-env setup-all setup-network setup-dirs setup-domain setup-resolver setup-db-user setup-db-passwords setup-salts report reload-if-running restart up down logs status backup-db check-docker install-wordpress
+.PHONY: help init-env setup-all setup-network setup-dirs setup-domain setup-resolver setup-db-user setup-db-passwords setup-salts setup-jwt-secret report reload-if-running restart up down logs status backup-db check-docker install-wordpress
 
 # Color definitions
 CLR_RESET   = \033[0m
@@ -21,6 +21,7 @@ help:
 	@echo -e "  $(CLR_GREEN)make setup-db-user$(CLR_RESET)      - Configure database username (default: wordpress_user)"
 	@echo -e "  $(CLR_GREEN)make setup-db-passwords$(CLR_RESET) - Generate cryptographically strong random DB & root passwords"
 	@echo -e "  $(CLR_GREEN)make setup-salts$(CLR_RESET)        - Automatically generate 8 unique WordPress security keys & salts"
+	@echo -e "  $(CLR_GREEN)make setup-jwt-secret$(CLR_RESET)   - Automatically generate secret key for WPGraphQL JWT Authentication"
 	@echo -e "  $(CLR_GREEN)make setup-network$(CLR_RESET)      - Verify / create shared Traefik Docker network (my_network)"
 	@echo -e "  $(CLR_GREEN)make setup-dirs$(CLR_RESET)         - Initialize volume directories with proper www-data permissions"
 	@echo -e "  $(CLR_GREEN)make report$(CLR_RESET)             - Display colored summary box of current WordPress configuration"
@@ -206,6 +207,29 @@ setup-salts: init-env
 	echo -e "$(CLR_GREEN)[✔] 8 WordPress authentication keys & salts generated successfully.$(CLR_RESET)"
 	@$(MAKE) --no-print-directory reload-if-running
 
+# 8. Configure WPGraphQL JWT Authentication Secret Key
+setup-jwt-secret: init-env
+	@jwt_key=$$(grep -E '^GRAPHQL_JWT_AUTH_SECRET_KEY=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	if [ -n "$$jwt_key" ] && [ "$$jwt_key" != "put_your_super_strong_graphql_jwt_secret_here" ]; then \
+		echo -e "$(CLR_GREEN)[✔] WPGraphQL JWT secret key already configured.$(CLR_RESET)"; \
+		read -p "Do you want to re-generate WPGraphQL JWT secret key? [y/N]: " reconf </dev/tty; \
+		if [ "$$reconf" != "y" ] && [ "$$reconf" != "Y" ]; then \
+			exit 0; \
+		fi; \
+	fi; \
+	echo -e "$(CLR_YELLOW)[*] Generating cryptographically secure secret for WPGraphQL JWT Authentication (64 chars)...$(CLR_RESET)"; \
+	gen_jwt_key=$$(openssl rand -base64 64 2>/dev/null | tr -dc 'A-Za-z0-9_#%+=@!' | head -c 64); \
+	if [ -z "$$gen_jwt_key" ]; then \
+		gen_jwt_key=$$(tr -dc 'A-Za-z0-9_#%+=@!' < /dev/urandom 2>/dev/null | head -c 64); \
+	fi; \
+	if grep -q '^GRAPHQL_JWT_AUTH_SECRET_KEY=' .env; then \
+		sed -i -E "s|^GRAPHQL_JWT_AUTH_SECRET_KEY=.*|GRAPHQL_JWT_AUTH_SECRET_KEY=$$gen_jwt_key|" .env; \
+	else \
+		echo "GRAPHQL_JWT_AUTH_SECRET_KEY=$$gen_jwt_key" >> .env; \
+	fi; \
+	echo -e "$(CLR_GREEN)[✔] WPGraphQL JWT secret key generated successfully and saved to .env.$(CLR_RESET)"
+	@$(MAKE) --no-print-directory reload-if-running
+
 # Color formatted status report box
 report: init-env
 	@DOM_SET=$$(grep -E '^WORDPRESS_DOMAIN=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
@@ -216,6 +240,7 @@ report: init-env
 	DB_PASS_SET=$$(grep -E '^WORDPRESS_DB_PASSWORD=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
 	ROOT_PASS_SET=$$(grep -E '^MYSQL_ROOT_PASSWORD=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
 	AUTH_KEY_SET=$$(grep -E '^WORDPRESS_AUTH_KEY=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	JWT_KEY_SET=$$(grep -E '^GRAPHQL_JWT_AUTH_SECRET_KEY=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
 	NET_CHECK="Missing (my_network)"; \
 	(docker network inspect my_network >/dev/null 2>&1 || sudo docker network inspect my_network >/dev/null 2>&1) && NET_CHECK="Active (my_network)"; \
 	STATUS_CHECK="Stopped"; \
@@ -230,6 +255,7 @@ report: init-env
 	[ -z "$$DB_PASS_SET" ] || [ "$$DB_PASS_SET" = "ChangeThisToAStrongPassword123!" ] && DB_PASS_STATUS="Default/Unset" || DB_PASS_STATUS="Configured (Strong Random)"; \
 	[ -z "$$ROOT_PASS_SET" ] || [ "$$ROOT_PASS_SET" = "ChangeThisToAStrongRootPassword123!" ] && ROOT_PASS_STATUS="Default/Unset" || ROOT_PASS_STATUS="Configured (Strong Random)"; \
 	[ -z "$$AUTH_KEY_SET" ] || [ "$$AUTH_KEY_SET" = "put_your_unique_phrase_here" ] && SALTS_STATUS="Default/Unset" || SALTS_STATUS="Configured (8 Keys)"; \
+	[ -z "$$JWT_KEY_SET" ] || [ "$$JWT_KEY_SET" = "put_your_super_strong_graphql_jwt_secret_here" ] && JWT_STATUS="Default/Unset" || JWT_STATUS="Configured (64 chars)"; \
 	echo ""; \
 	echo -e "$(CLR_CYAN)╔══════════════════════════════════════════════════════════════════════════════╗$(CLR_RESET)"; \
 	echo -e "$(CLR_CYAN)║$(CLR_RESET)                   $(CLR_BOLD)$(CLR_WHITE)WORDPRESS CONFIGURATION & STATUS REPORT$(CLR_RESET)                    $(CLR_CYAN)║$(CLR_RESET)"; \
@@ -242,6 +268,7 @@ report: init-env
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-48s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "Database Password" "$$DB_PASS_STATUS"; \
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-48s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "MySQL Root Password" "$$ROOT_PASS_STATUS"; \
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-48s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "Auth Keys & Salts" "$$SALTS_STATUS"; \
+	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-48s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "GraphQL JWT Secret" "$$JWT_STATUS"; \
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-48s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "Shared Network" "$$NET_CHECK"; \
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-48s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "Container Status" "$$STATUS_CHECK"; \
 	echo -e "$(CLR_CYAN)╚══════════════════════════════════════════════════════════════════════════════╝$(CLR_RESET)"; \
@@ -307,7 +334,7 @@ check-docker:
 	fi
 
 # End-to-end setup orchestrator
-setup-all: init-env setup-network setup-dirs setup-domain setup-resolver setup-db-user setup-db-passwords setup-salts report reload-if-running
+setup-all: init-env setup-network setup-dirs setup-domain setup-resolver setup-db-user setup-db-passwords setup-salts setup-jwt-secret report reload-if-running
 
 # Complete installation target
 install-wordpress: check-docker setup-all
