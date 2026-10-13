@@ -1,6 +1,6 @@
 SHELL = /bin/bash
 
-.PHONY: help check-docker setup-all setup-firewall setup-certs setup-auth setup-acme setup-cloudflare setup-dashboard report install-traefik restart reload-if-running
+.PHONY: help check-docker setup-all setup-firewall setup-certs setup-auth setup-acme setup-cloudflare setup-dashboard setup-crowdsec disable-crowdsec enable-crowdsec enable-crowdsec-all disable-crowdsec-all enable-crowdsec-global disable-crowdsec-global report crowdsec-report cs-report logs-crowdsec install-traefik restart reload-if-running
 
 # Color definitions
 CLR_RESET   = \033[0m
@@ -22,7 +22,13 @@ help:
 	@echo -e "  $(CLR_GREEN)make setup-acme$(CLR_RESET)         - Configure Let's Encrypt / ACME email (allows skipping)"
 	@echo -e "  $(CLR_GREEN)make setup-cloudflare$(CLR_RESET)   - Configure Cloudflare API DNS Token (allows skipping)"
 	@echo -e "  $(CLR_GREEN)make setup-dashboard$(CLR_RESET)    - Configure Dashboard domain & resolver (Let's Encrypt / Cloudflare)"
+	@echo -e "  $(CLR_GREEN)make setup-crowdsec$(CLR_RESET)     - Configure & enable CrowdSec IPS / Bouncer (prompts for API key & tails logs)"
+	@echo -e "  $(CLR_GREEN)make disable-crowdsec$(CLR_RESET)   - Disable CrowdSec IPS & stop CrowdSec container"
+	@echo -e "  $(CLR_GREEN)make enable-crowdsec-all$(CLR_RESET)- Protect ALL endpoints globally via websecure entrypoint & restart"
+	@echo -e "  $(CLR_GREEN)make disable-crowdsec-all$(CLR_RESET)- Revert to per-service protection (disable global entrypoint)"
 	@echo -e "  $(CLR_GREEN)make report$(CLR_RESET)             - Display colored summary box of current Traefik configuration"
+	@echo -e "  $(CLR_GREEN)make crowdsec-report$(CLR_RESET)    - Display detailed CrowdSec report (bouncers, active bans, metrics)"
+	@echo -e "  $(CLR_GREEN)make logs-crowdsec$(CLR_RESET)      - Tail live logs from CrowdSec container"
 	@echo -e "  $(CLR_GREEN)make restart$(CLR_RESET)            - Restart Traefik containers via Docker Compose"
 	@echo -e "  $(CLR_GREEN)make install-traefik$(CLR_RESET)    - Run complete setup and launch Traefik containers"
 
@@ -179,13 +185,187 @@ setup-dashboard: init-env
 	fi
 	@$(MAKE) --no-print-directory reload-if-running
 
+# 5. CrowdSec IPS and Traefik Bouncer setup
+setup-crowdsec: init-env
+	@cs_enabled=$$(grep -E '^CROWDSEC_ENABLED=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	cs_key=$$(grep -E '^CROWDSEC_BOUNCER_KEY=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	if [ "$$cs_enabled" = "true" ] && [ -n "$$cs_key" ]; then \
+		echo -e "$(CLR_GREEN)[✔] CrowdSec already configured and enabled (Bouncer Key: $${cs_key:0:6}...$${cs_key: -4}).$(CLR_RESET)"; \
+		read -p "Do you want to reconfigure CrowdSec? [y/N]: " reconf </dev/tty; \
+		if [ "$$reconf" != "y" ] && [ "$$reconf" != "Y" ]; then \
+			exit 0; \
+		fi; \
+	fi; \
+	echo -e "$(CLR_YELLOW)[*] Configuring CrowdSec Intrusion Prevention System (IPS):$(CLR_RESET)"; \
+	read -p "Enable CrowdSec for Traefik? [Y/n, default Y]: " enable_cs </dev/tty; \
+	if [ "$$enable_cs" = "n" ] || [ "$$enable_cs" = "N" ]; then \
+		$(MAKE) --no-print-directory disable-crowdsec; \
+		exit 0; \
+	fi; \
+	echo -e "$(CLR_YELLOW)[*] Configuring CrowdSec Bouncer API Key:$(CLR_RESET)"; \
+	echo "Leave blank to auto-generate a secure random 32-character key."; \
+	read -p "Enter CrowdSec Bouncer Key [auto-generate]: " key_input </dev/tty; \
+	if [ -z "$$key_input" ]; then \
+		key_input=$$(openssl rand -hex 16 2>/dev/null || od -vN 16 -An -tx1 /dev/urandom 2>/dev/null | tr -d ' \n'); \
+		if [ -z "$$key_input" ]; then \
+			key_input=$$(date +%s%N | sha256sum | head -c 32); \
+		fi; \
+		echo -e "$(CLR_GREEN)[✔] Auto-generated Bouncer API Key: $$key_input$(CLR_RESET)"; \
+	else \
+		echo -e "$(CLR_GREEN)[✔] Using provided Bouncer API Key.$(CLR_RESET)"; \
+	fi; \
+	read -p "Protect ALL endpoints/services globally via websecure entrypoint? [y/N, default N]: " global_cs </dev/tty; \
+	if [ "$$global_cs" = "y" ] || [ "$$global_cs" = "Y" ]; then \
+		sed -i -E 's|^[[:space:]]*#[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|      - "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|' docker-compose.yml; \
+		echo -e "$(CLR_GREEN)[✔] Global protection enabled on websecure entrypoint.$(CLR_RESET)"; \
+	else \
+		sed -i -E 's|^[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|      # - "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|' docker-compose.yml; \
+		echo -e "$(CLR_YELLOW)[✔] Global protection disabled (per-service router labels will be used).$(CLR_RESET)"; \
+	fi; \
+	mkdir -p ./crowdsec/config ./crowdsec/data ./logs; \
+	touch ./logs/access.log; \
+	if [ ! -f ./crowdsec/acquis.yaml ]; then \
+		printf "filenames:\n  - /var/log/traefik/access.log\nlabels:\n  type: traefik\n" > ./crowdsec/acquis.yaml; \
+		echo -e "$(CLR_GREEN)[✔] Created crowdsec/acquis.yaml for Traefik access log acquisition.$(CLR_RESET)"; \
+	fi; \
+	if grep -q '^CROWDSEC_ENABLED=' .env; then \
+		sed -i -E "s|^CROWDSEC_ENABLED=.*|CROWDSEC_ENABLED=true|" .env; \
+	else \
+		echo "CROWDSEC_ENABLED=true" >> .env; \
+	fi; \
+	if grep -q '^COMPOSE_PROFILES=' .env; then \
+		sed -i -E "s|^COMPOSE_PROFILES=.*|COMPOSE_PROFILES=crowdsec|" .env; \
+	else \
+		echo "COMPOSE_PROFILES=crowdsec" >> .env; \
+	fi; \
+	if grep -q '^CROWDSEC_BOUNCER_KEY=' .env; then \
+		sed -i -E "s|^CROWDSEC_BOUNCER_KEY=.*|CROWDSEC_BOUNCER_KEY=$$key_input|" .env; \
+	else \
+		echo "CROWDSEC_BOUNCER_KEY=$$key_input" >> .env; \
+	fi; \
+	echo -e "$(CLR_GREEN)[✔] CrowdSec configuration saved to .env.$(CLR_RESET)"; \
+	$(MAKE) --no-print-directory reload-if-running; \
+	echo ""; \
+	echo -e "$(CLR_YELLOW)[*] Waiting 5 seconds for CrowdSec and Traefik to initialize...$(CLR_RESET)"; \
+	sleep 5; \
+	echo -e "$(CLR_CYAN)[*] Verifying Live Logs & Bouncer Connectivity:$(CLR_RESET)"; \
+	if command -v docker >/dev/null 2>&1; then \
+		if [ -n "$$(sudo docker compose ps -q crowdsec 2>/dev/null)" ] || [ -n "$$(sudo docker ps -q -f name=^/crowdsec$$ 2>/dev/null)" ]; then \
+			echo -e "$(CLR_YELLOW)--- CrowdSec Engine Recent Logs ---$(CLR_RESET)"; \
+			sudo docker compose logs --tail=15 crowdsec 2>/dev/null || true; \
+			echo -e "$(CLR_YELLOW)--- Traefik Bouncer Recent Logs ---$(CLR_RESET)"; \
+			sudo docker compose logs --tail=15 traefik 2>/dev/null || true; \
+			echo -e "$(CLR_YELLOW)--- Registered Bouncers Status ---$(CLR_RESET)"; \
+			sudo docker exec crowdsec cscli bouncers list 2>/dev/null || true; \
+		fi; \
+	fi
+
+enable-crowdsec: setup-crowdsec
+
+# Enable CrowdSec middleware globally for all endpoints on websecure entrypoint
+enable-crowdsec-all: init-env
+	@echo -e "$(CLR_YELLOW)[*] Enabling CrowdSec middleware globally for all websecure endpoints...$(CLR_RESET)"
+	@if grep -q '^[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"' docker-compose.yml; then \
+		echo -e "$(CLR_GREEN)[✔] Global CrowdSec entrypoint middleware is already active.$(CLR_RESET)"; \
+	else \
+		sed -i -E 's|^[[:space:]]*#[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|      - "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|' docker-compose.yml; \
+		echo -e "$(CLR_GREEN)[✔] Added global entrypoint middleware to docker-compose.yml.$(CLR_RESET)"; \
+	fi
+	@if [ "$$(grep -E '^CROWDSEC_ENABLED=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]')" != "true" ]; then \
+		echo -e "$(CLR_YELLOW)[*] CrowdSec core is currently disabled. Starting CrowdSec setup...$(CLR_RESET)"; \
+		$(MAKE) --no-print-directory setup-crowdsec; \
+	else \
+		$(MAKE) --no-print-directory reload-if-running; \
+	fi
+	@echo -e "$(CLR_GREEN)[✔] All endpoints and routers on websecure are now automatically protected by CrowdSec.$(CLR_RESET)"
+
+enable-crowdsec-global: enable-crowdsec-all
+
+# Disable global CrowdSec middleware on entrypoint (revert to per-service)
+disable-crowdsec-all: init-env
+	@echo -e "$(CLR_YELLOW)[*] Disabling global entrypoint middleware in docker-compose.yml...$(CLR_RESET)"
+	@if grep -q '^[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"' docker-compose.yml; then \
+		sed -i -E 's|^[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|      # - "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|' docker-compose.yml; \
+		echo -e "$(CLR_GREEN)[✔] Global entrypoint middleware commented out.$(CLR_RESET)"; \
+		$(MAKE) --no-print-directory reload-if-running; \
+		echo -e "$(CLR_GREEN)[✔] Reverted to per-service protection (services can still use router labels).$(CLR_RESET)"; \
+	else \
+		echo -e "$(CLR_GREEN)[✔] Global entrypoint middleware is already disabled.$(CLR_RESET)"; \
+	fi
+
+disable-crowdsec-global: disable-crowdsec-all
+
+# Tail live logs from CrowdSec container
+logs-crowdsec:
+	@if command -v docker >/dev/null 2>&1; then \
+		sudo docker compose logs -f crowdsec; \
+	else \
+		echo -e "$(CLR_RED)[!] Docker command not found.$(CLR_RESET)"; \
+	fi
+
+# Detailed CrowdSec Security Report
+crowdsec-report: init-env
+	@echo ""
+	@echo -e "$(CLR_CYAN)╔══════════════════════════════════════════════════════════════════════════════╗$(CLR_RESET)"
+	@echo -e "$(CLR_CYAN)║$(CLR_RESET)                   $(CLR_BOLD)$(CLR_WHITE)CROWDSEC DETAILED SECURITY REPORT$(CLR_RESET)                         $(CLR_CYAN)║$(CLR_RESET)"
+	@echo -e "$(CLR_CYAN)╚══════════════════════════════════════════════════════════════════════════════╝$(CLR_RESET)"
+	@if ! command -v docker >/dev/null 2>&1; then \
+		echo -e "$(CLR_RED)[!] Docker is not installed or running.$(CLR_RESET)"; \
+		exit 1; \
+	fi
+	@CS_ID=$$(sudo docker compose ps -q crowdsec 2>/dev/null || sudo docker ps -q -f name=^/crowdsec$$ 2>/dev/null); \
+	if [ -z "$$CS_ID" ]; then \
+		echo -e "$(CLR_RED)[!] CrowdSec container is not currently running.$(CLR_RESET)"; \
+		echo -e "    Run $(CLR_GREEN)make setup-crowdsec$(CLR_RESET) to configure and start CrowdSec."; \
+		exit 0; \
+	fi
+	@echo -e "$(CLR_YELLOW)[1] Registered Bouncers:$(CLR_RESET)"
+	@sudo docker exec crowdsec cscli bouncers list 2>/dev/null || echo "Unable to query bouncers"
+	@echo ""
+	@echo -e "$(CLR_YELLOW)[2] Active Ban Decisions:$(CLR_RESET)"
+	@sudo docker exec crowdsec cscli decisions list 2>/dev/null || echo "Unable to query decisions"
+	@echo ""
+	@echo -e "$(CLR_YELLOW)[3] Log Acquisition & Metrics Summary:$(CLR_RESET)"
+	@sudo docker exec crowdsec cscli metrics 2>/dev/null || echo "Unable to query metrics"
+	@echo ""
+
+cs-report: crowdsec-report
+
+# Disable CrowdSec and stop container
+disable-crowdsec: init-env
+	@echo -e "$(CLR_YELLOW)[*] Disabling CrowdSec Intrusion Prevention...$(CLR_RESET)"
+	@if grep -q '^CROWDSEC_ENABLED=' .env; then \
+		sed -i -E "s|^CROWDSEC_ENABLED=.*|CROWDSEC_ENABLED=false|" .env; \
+	else \
+		echo "CROWDSEC_ENABLED=false" >> .env; \
+	fi
+	@if grep -q '^COMPOSE_PROFILES=' .env; then \
+		sed -i -E "s|^COMPOSE_PROFILES=.*|COMPOSE_PROFILES=|" .env; \
+	else \
+		echo "COMPOSE_PROFILES=" >> .env; \
+	fi
+	@if grep -q '^[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"' docker-compose.yml; then \
+		sed -i -E 's|^[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|      # - "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|' docker-compose.yml; \
+	fi
+	@if command -v docker >/dev/null 2>&1; then \
+		if [ -n "$$(sudo docker compose ps -q crowdsec 2>/dev/null)" ] || [ -n "$$(sudo docker ps -q -f name=^/crowdsec$$ 2>/dev/null)" ]; then \
+			echo -e "$(CLR_YELLOW)[*] Stopping and removing CrowdSec container...$(CLR_RESET)"; \
+			sudo docker compose stop crowdsec 2>/dev/null || true; \
+			sudo docker compose rm -f crowdsec 2>/dev/null || true; \
+		fi; \
+	fi
+	@echo -e "$(CLR_GREEN)[✔] CrowdSec disabled successfully.$(CLR_RESET)"
+	@$(MAKE) --no-print-directory reload-if-running
+
 # Color formatted status report box
 report: init-env
-	@AUTH_SET=$$(grep -E '^TRAEFIK_BASIC_AUTH_USERS=' .env | cut -d '=' -f2- | tr -d '[:space:]'); \
-	ACME_SET=$$(grep -E '^ACME_EMAIL=' .env | cut -d '=' -f2- | tr -d '[:space:]'); \
-	CF_SET=$$(grep -E '^CF_DNS_API_TOKEN=' .env | cut -d '=' -f2- | tr -d '[:space:]'); \
-	DOM_SET=$$(grep -E '^TRAEFIK_DASHBOARD_DOMAIN=' .env | cut -d '=' -f2- | tr -d '[:space:]'); \
-	RES_SET=$$(grep -E '^TRAEFIK_DASHBOARD_CERTRESOLVER=' .env | cut -d '=' -f2- | tr -d '[:space:]'); \
+	@AUTH_SET=$$(grep -E '^TRAEFIK_BASIC_AUTH_USERS=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	ACME_SET=$$(grep -E '^ACME_EMAIL=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	CF_SET=$$(grep -E '^CF_DNS_API_TOKEN=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	DOM_SET=$$(grep -E '^TRAEFIK_DASHBOARD_DOMAIN=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	RES_SET=$$(grep -E '^TRAEFIK_DASHBOARD_CERTRESOLVER=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	CS_ENABLED=$$(grep -E '^CROWDSEC_ENABLED=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	CS_KEY=$$(grep -E '^CROWDSEC_BOUNCER_KEY=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
 	PORT_CHECK="Open (80, 443)"; \
 	sudo iptables -C INPUT -p tcp -m multiport --dports 80,443 -j ACCEPT 2>/dev/null || PORT_CHECK="Needs Attention"; \
 	PERM_CHECK="Not Set"; \
@@ -195,6 +375,11 @@ report: init-env
 	[ -z "$$CF_SET" ] || [ "$$CF_SET" = "your_cloudflare_api_token_here" ] && CF_STATUS="Disabled (Skipped)" || CF_STATUS="Configured"; \
 	[ -z "$$DOM_SET" ] || [ "$$DOM_SET" = "traefik.example.com" ] && DOM_STATUS="Default (traefik.example.com)" || DOM_STATUS="$$DOM_SET"; \
 	[ "$$RES_SET" = "cloudflare_resolver" ] && RES_STATUS="Cloudflare DNS-01" || RES_STATUS="Let's Encrypt HTTP-01"; \
+	[ "$$CS_ENABLED" = "true" ] && [ -n "$$CS_KEY" ] && CS_STATUS="Enabled" || CS_STATUS="Disabled"; \
+	CS_SCOPE="Per-Service"; \
+	grep -q '^[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"' docker-compose.yml 2>/dev/null && CS_SCOPE="All Endpoints (Global)"; \
+	CS_RUNNING="Stopped"; \
+	command -v docker >/dev/null 2>&1 && [ -n "$$(sudo docker compose ps -q crowdsec 2>/dev/null || sudo docker ps -q -f name=^/crowdsec$$ 2>/dev/null)" ] && CS_RUNNING="Running"; \
 	echo ""; \
 	echo -e "$(CLR_CYAN)╔══════════════════════════════════════════════════════════════════════════════╗$(CLR_RESET)"; \
 	echo -e "$(CLR_CYAN)║$(CLR_RESET)                   $(CLR_BOLD)$(CLR_WHITE)TRAEFIK CONFIGURATION & STATUS REPORT$(CLR_RESET)                      $(CLR_CYAN)║$(CLR_RESET)"; \
@@ -204,6 +389,8 @@ report: init-env
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "Basic Auth Status" "$$AUTH_STATUS"; \
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "ACME Notification Email" "$$ACME_STATUS"; \
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "Cloudflare DNS Token" "$$CF_STATUS"; \
+	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "CrowdSec IPS (Bouncer)" "$$CS_STATUS ($$CS_RUNNING)"; \
+	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "CrowdSec Scope" "$$CS_SCOPE"; \
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "Firewall Ports" "$$PORT_CHECK"; \
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)acme.json (perms: %-27s)$(CLR_CYAN)║$(CLR_RESET)\n" "$$PERM_CHECK"; \
 	echo -e "$(CLR_CYAN)╚══════════════════════════════════════════════════════════════════════════════╝$(CLR_RESET)"; \
@@ -234,7 +421,7 @@ check-docker:
 	fi
 
 # End-to-end setup orchestrator
-setup-all: init-env setup-firewall setup-certs setup-auth setup-acme setup-cloudflare setup-dashboard report reload-if-running
+setup-all: init-env setup-firewall setup-certs setup-auth setup-acme setup-cloudflare setup-dashboard setup-crowdsec report reload-if-running
 
 install-traefik: check-docker setup-all
 	@if [ -z "$$(sudo docker compose ps -q traefik 2>/dev/null)" ] && [ -z "$$(sudo docker ps -q -f name=^/traefik$$ 2>/dev/null)" ]; then \

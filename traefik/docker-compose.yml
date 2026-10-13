@@ -28,6 +28,8 @@ services:
       - "--entrypoints.websecure.address=:443"
       - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
       - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      # Global Entrypoint Protection (uncomment to protect all websecure routes globally):
+      # - "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"
 
       # Observability / Metrics
       - "--metrics.prometheus=true"
@@ -53,6 +55,10 @@ services:
       - "--certificatesresolvers.cloudflare_resolver.acme.dnschallenge.provider=cloudflare"
       - "--certificatesresolvers.cloudflare_resolver.acme.dnschallenge.resolvers=1.1.1.1:53,1.0.0.1:53"
       # - "--certificatesresolvers.cloudflare_resolver.acme.caServer=https://acme-staging-v02.api.letsencrypt.org/directory"
+
+      # CrowdSec Traefik Plugin (Static Configuration)
+      - "--experimental.plugins.crowdsec-bouncer.modulename=github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin"
+      - "--experimental.plugins.crowdsec-bouncer.version=${CROWDSEC_BOUNCER_VERSION:-v1.7.1}"
 
     ports:
       - "80:80"
@@ -91,13 +97,41 @@ services:
       - "traefik.http.routers.dashboard.service=api@internal"
       - "traefik.http.routers.dashboard.tls=true"
       - "traefik.http.routers.dashboard.tls.certresolver=${TRAEFIK_DASHBOARD_CERTRESOLVER:-myresolver}"
-      - "traefik.http.routers.dashboard.middlewares=dashboard-auth,dashboard-compress"
+      - "traefik.http.routers.dashboard.middlewares=crowdsec-bouncer,dashboard-auth,dashboard-compress"
+
+      # CrowdSec Bouncer Middleware Definition
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.enabled=${CROWDSEC_ENABLED:-false}"
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.crowdsecmode=stream"
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.crowdseclapihost=crowdsec:8080"
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.crowdseclapischeme=http"
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.crowdseclapikey=${CROWDSEC_BOUNCER_KEY:-}"
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.updateintervalseconds=60"
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.defaultdecisionseconds=60"
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.streamstartupblock=false"
 
       # Authentication Middleware (Basic Auth from .env)
       - "traefik.http.middlewares.dashboard-auth.basicauth.users=${TRAEFIK_BASIC_AUTH_USERS}"
 
       # Compression Middleware
       - "traefik.http.middlewares.dashboard-compress.compress=true"
+
+  crowdsec:
+    image: ${CROWDSEC_IMAGE:-crowdsecurity/crowdsec:latest}
+    container_name: crowdsec
+    hostname: crowdsec
+    restart: unless-stopped
+    profiles:
+      - crowdsec
+    environment:
+      BOUNCER_KEY_TRAEFIK: ${CROWDSEC_BOUNCER_KEY:-}
+      COLLECTIONS: "crowdsecurity/traefik crowdsecurity/http-cve crowdsecurity/whitelist-good-actors crowdsecurity/base-http-scenarios"
+    volumes:
+      - ./crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml:ro
+      - ./crowdsec/config:/etc/crowdsec:rw
+      - ./crowdsec/data:/var/lib/crowdsec/data:rw
+      - ./logs:/var/log/traefik:ro
+    networks:
+      - my_network
 
 networks:
   my_network:

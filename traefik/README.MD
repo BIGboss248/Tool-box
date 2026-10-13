@@ -48,7 +48,25 @@ The Makefile includes individual idempotent setup targets as well as an automate
 | `make setup-acme` | Sets ACME registration email or allows skipping. |
 | `make setup-cloudflare` | Configures Cloudflare DNS API token or allows skipping. |
 | `make setup-dashboard` | Prompts for dashboard domain and TLS resolver (`myresolver` vs `cloudflare_resolver`). |
-| `make report` | Displays an ASCII colored status box of all configurations and system states. |
+| `make setup-crowdsec` | Interactively enables CrowdSec IPS, prompts/auto-generates API key, selects scope, and tails verification logs. |
+| `make disable-crowdsec`| Disables CrowdSec IPS, stops the CrowdSec container, and updates Traefik. |
+| `make enable-crowdsec-all` | Protects ALL services globally via `websecure` entrypoint and restarts Traefik. |
+| `make disable-crowdsec-all`| Reverts to per-service protection (disables global entrypoint middleware). |
+| `make report` | Displays an ASCII colored status box of all configurations, scopes, and system states. |
+| `make crowdsec-report`| Displays a detailed CrowdSec report (registered bouncers, active bans, metrics). |
+| `make logs-crowdsec` | Follows live logs from the CrowdSec container. |
 | `make install-traefik` | Runs `setup-all` and launches Traefik with `docker compose up -d`. |
+
+## CrowdSec Intrusion Prevention (IPS) & Bouncer
+
+CrowdSec is integrated using the [CrowdSec Bouncer Traefik Plugin](https://plugins.traefik.io/plugins/6335346ca4caa9ddeffda116/crowdsec-bouncer-traefik-plugin):
+- **Log Acquisition**: CrowdSec parses Traefik's access log (`./logs/access.log`) using `crowdsecurity/traefik`.
+- **Decision Enforcement**: The bouncer plugin runs in **stream mode** inside Traefik, fetching decisions periodically into an in-memory cache to prevent any latency overhead on HTTP requests.
+- **Enable on Running Instance**: Run `make setup-crowdsec` (prompts for API key, global scope selection, and tails live logs).
+- **Protect All Endpoints (Zero Labels)**: Run `make enable-crowdsec-all` to protect all services routed via port 443 automatically.
+- **Per-Service Mode**: Run `make disable-crowdsec-all` to only protect services explicitly labeled with `crowdsec-bouncer@docker`.
+- **Detailed Security Report**: Run `make crowdsec-report` to view active bans, bouncer status, and parsed metrics.
+- **Live Logs**: Run `make logs-crowdsec` to monitor the CrowdSec engine.
+- **Disable Anytime**: Run `make disable-crowdsec`.
 
 
