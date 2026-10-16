@@ -53,6 +53,8 @@ The Makefile includes individual idempotent setup targets as well as an automate
 | `make disable-crowdsec`| Disables CrowdSec IPS, stops the CrowdSec container, and updates Traefik. |
 | `make enable-crowdsec-all` | Protects ALL services globally via `websecure` entrypoint and restarts Traefik. |
 | `make disable-crowdsec-all`| Reverts to per-service protection (disables global entrypoint middleware). |
+| `make setup-metrics` | Interactively configures & enables Prometheus Metrics with built-in Prometheus Server UI (`127.0.0.1:9090`) or internal `/metrics` endpoint (`:8082`). |
+| `make disable-metrics` | Disables Prometheus Metrics, comments out `--metrics.*` flags, and stops the Prometheus container. |
 | `make setup-tracing` | Interactively configures & enables OpenTelemetry (OTLP) Tracing with built-in Jaeger UI (`127.0.0.1:16686`) or a custom OTLP collector. |
 | `make disable-tracing` | Disables OpenTelemetry Tracing, comments out `--tracing.*` flags, and stops the Jaeger container. |
 | `make report` | Displays an ASCII colored status box of all configurations, Captcha status, Tracing status, scopes, and system states. |
@@ -193,6 +195,36 @@ Traefik v3.7 natively instruments HTTP requests using the **OpenTelemetry (OTLP)
 - **Disable Tracing Globally**:
   ```bash
   make disable-tracing
+  ```
+
+---
+
+## Optional Prometheus Metrics Collection (Traefik v3.7)
+
+Traefik v3.7 exports rich time-series metrics in Prometheus format across four levels:
+1. **Global Metrics**: Config reloads (`traefik_config_reloads_total`), open TCP/UDP connections (`traefik_open_connections`), and TLS certificate expiration timestamps (`traefik_tls_certs_not_after`).
+2. **EntryPoint Metrics**: Total requests (`traefik_entrypoint_requests_total`), TLS handshakes by version/cipher (`traefik_entrypoint_requests_tls_total`), latency histograms (`traefik_entrypoint_request_duration_seconds_bucket`), and request/response byte counters.
+3. **Router Metrics** *(enabled via `TRAEFIK_METRICS_ADD_ROUTERS_LABELS=true`)*: Per-router request counts, status codes, latency histograms (`traefik_router_request_duration_seconds_bucket`), and bandwidth.
+4. **Service Metrics** *(enabled via `TRAEFIK_METRICS_ADD_SERVICES_LABELS=true`)*: Per-backend service request counts, retries (`traefik_service_retries_total`), healthcheck status (`traefik_service_server_up`), and latency histograms.
+
+### Security & Architecture
+- Rather than exposing `/metrics` publicly on port 443 (`websecure`), Traefik exposes `/metrics` on a dedicated internal entrypoint (`--entrypoints.metrics.address=:8082`) accessible **only inside the Docker network** (`http://traefik:8082/metrics`).
+- When using the built-in Prometheus container (`metrics` Docker Compose profile), `./prometheus/prometheus.yml` automatically scrapes both:
+  - **Traefik** (`traefik:8082/metrics`)
+  - **CrowdSec Engine** (`crowdsec:6060/metrics` — tracks parsed log lines, active bans, alerts, and LAPI queries)
+
+### Enable, View, and Disable Metrics
+- **Enable Interactively**:
+  ```bash
+  make enable-metrics
+  ```
+  Choose between:
+  1. **Built-in Prometheus Server Container** (`prom/prometheus:latest` with persistent `prometheus-data` volume and Web UI bound to `127.0.0.1:9090` — access via SSH tunnel: `ssh -L 9090:127.0.0.1:9090 user@your-server` and open `http://localhost:9090`).
+  2. **Internal Endpoint Only**: Exposes `http://traefik:8082/metrics` inside `my_network` so your existing Prometheus/Grafana stack (Grafana dashboard ID `17346`) can scrape it.
+- **Disable Metrics on Specific Routers**: Add the label `- "traefik.http.routers.<router-name>.observability.metrics=false"` to any container where you want to exclude metrics collection.
+- **Disable Metrics Globally**:
+  ```bash
+  make disable-metrics
   ```
 
 

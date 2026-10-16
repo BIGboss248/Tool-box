@@ -1,6 +1,6 @@
 SHELL = /bin/bash
 
-.PHONY: help check-docker setup-all setup-firewall setup-certs setup-auth setup-acme setup-cloudflare setup-dashboard setup-crowdsec setup-captcha disable-crowdsec enable-crowdsec enable-crowdsec-all disable-crowdsec-all enable-crowdsec-global disable-crowdsec-global setup-tracing enable-tracing disable-tracing report crowdsec-report cs-report crowdsec-bans bans cs-bans crowdsec-decisions crowdsec-captcha-test captcha-test crowdsec-unban unban logs-crowdsec install-traefik restart reload-if-running
+.PHONY: help check-docker setup-all setup-firewall setup-certs setup-auth setup-acme setup-cloudflare setup-dashboard setup-crowdsec setup-captcha disable-crowdsec enable-crowdsec enable-crowdsec-all disable-crowdsec-all enable-crowdsec-global disable-crowdsec-global setup-tracing enable-tracing disable-tracing setup-metrics enable-metrics disable-metrics report crowdsec-report cs-report crowdsec-bans bans cs-bans crowdsec-decisions crowdsec-captcha-test captcha-test crowdsec-unban unban logs-crowdsec install-traefik restart reload-if-running
 
 # Color definitions
 CLR_RESET   = \033[0m
@@ -27,6 +27,8 @@ help:
 	@echo -e "  $(CLR_GREEN)make disable-crowdsec$(CLR_RESET)   - Disable CrowdSec IPS & stop CrowdSec container"
 	@echo -e "  $(CLR_GREEN)make enable-crowdsec-all$(CLR_RESET)- Protect ALL endpoints globally via websecure entrypoint & restart"
 	@echo -e "  $(CLR_GREEN)make disable-crowdsec-all$(CLR_RESET)- Revert to per-service protection (disable global entrypoint)"
+	@echo -e "  $(CLR_GREEN)make setup-metrics$(CLR_RESET)      - Configure & enable Prometheus Metrics (Prometheus UI or endpoint only)"
+	@echo -e "  $(CLR_GREEN)make disable-metrics$(CLR_RESET)    - Disable Prometheus Metrics & stop Prometheus container"
 	@echo -e "  $(CLR_GREEN)make setup-tracing$(CLR_RESET)      - Configure & enable OpenTelemetry Tracing (Jaeger UI or custom OTLP)"
 	@echo -e "  $(CLR_GREEN)make disable-tracing$(CLR_RESET)    - Disable OpenTelemetry Tracing & stop Jaeger container"
 	@echo -e "  $(CLR_GREEN)make report$(CLR_RESET)             - Display colored summary box of current Traefik configuration"
@@ -650,6 +652,121 @@ disable-tracing: init-env
 	@echo -e "$(CLR_GREEN)[✔] OpenTelemetry Tracing disabled.$(CLR_RESET)"
 	@$(MAKE) --no-print-directory reload-if-running
 
+# 7. Optional Prometheus Metrics Collection (Traefik v3.7 + Built-in Prometheus Server)
+setup-metrics: init-env
+	@mt_enabled=$$(grep -E '^METRICS_ENABLED=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	if [ "$$mt_enabled" = "true" ]; then \
+		echo -e "$(CLR_GREEN)[✔] Prometheus Metrics already enabled.$(CLR_RESET)"; \
+		read -p "Do you want to reconfigure Prometheus Metrics? [y/N]: " reconf_mt </dev/tty; \
+		if [ "$$reconf_mt" != "y" ] && [ "$$reconf_mt" != "Y" ]; then \
+			exit 0; \
+		fi; \
+	fi; \
+	echo -e "$(CLR_YELLOW)[*] Optional Prometheus Metrics Collection (Traefik v3.7):$(CLR_RESET)"; \
+	if [ "$(FORCE_METRICS)" = "1" ]; then \
+		read -p "Enable Prometheus Metrics for Traefik? [Y/n, default Y]: " enable_mt </dev/tty; \
+		enable_mt=$${enable_mt:-Y}; \
+	else \
+		read -p "Enable Prometheus Metrics for Traefik? [y/N, default N]: " enable_mt </dev/tty; \
+		enable_mt=$${enable_mt:-N}; \
+	fi; \
+	if [ "$$enable_mt" != "y" ] && [ "$$enable_mt" != "Y" ]; then \
+		$(MAKE) --no-print-directory disable-metrics; \
+		exit 0; \
+	fi; \
+	echo "Select Prometheus deployment mode:"; \
+	echo "  1) Built-in Prometheus container (scrapes traefik:8082 + crowdsec:6060, UI on port 9090) [recommended]"; \
+	echo "  2) Expose /metrics endpoint only on Docker network (http://traefik:8082/metrics for external Prometheus)"; \
+	read -p "Choose [1/2, default 1]: " mt_backend </dev/tty; \
+	mt_backend=$${mt_backend:-1}; \
+	if [ "$$mt_backend" = "2" ]; then \
+		use_prom="false"; \
+	else \
+		use_prom="true"; \
+		read -p "Enter Prometheus data retention period [default 15d]: " prom_ret </dev/tty; \
+		prom_ret=$${prom_ret:-15d}; \
+		grep -q '^PROMETHEUS_RETENTION=' .env && sed -i -E "s|^PROMETHEUS_RETENTION=.*|PROMETHEUS_RETENTION=$$prom_ret|" .env || echo "PROMETHEUS_RETENTION=$$prom_ret" >> .env; \
+	fi; \
+	read -p "Include per-router metrics labels (addRoutersLabels)? [Y/n, default Y]: " mt_routers </dev/tty; \
+	if [ "$$mt_routers" = "n" ] || [ "$$mt_routers" = "N" ]; then \
+		mt_routers_val="false"; \
+	else \
+		mt_routers_val="true"; \
+	fi; \
+	read -p "Include per-service metrics labels (addServicesLabels)? [Y/n, default Y]: " mt_services </dev/tty; \
+	if [ "$$mt_services" = "n" ] || [ "$$mt_services" = "N" ]; then \
+		mt_services_val="false"; \
+	else \
+		mt_services_val="true"; \
+	fi; \
+	read -p "Include internal Traefik resources (addInternals)? [y/N, default N]: " mt_int </dev/tty; \
+	if [ "$$mt_int" = "y" ] || [ "$$mt_int" = "Y" ]; then \
+		mt_int_val="true"; \
+	else \
+		mt_int_val="false"; \
+	fi; \
+	read -p "Enter latency histogram buckets in seconds [default 0.1,0.3,1.2,5.0]: " mt_buckets </dev/tty; \
+	mt_buckets=$${mt_buckets:-0.1,0.3,1.2,5.0}; \
+	mkdir -p ./prometheus; \
+	if [ ! -f ./prometheus/prometheus.yml ]; then \
+		printf 'global:\n  scrape_interval: 15s\n  evaluation_interval: 15s\n\nscrape_configs:\n  - job_name: "traefik"\n    static_configs:\n      - targets: ["traefik:8082"]\n\n  - job_name: "crowdsec"\n    static_configs:\n      - targets: ["crowdsec:6060"]\n' > ./prometheus/prometheus.yml; \
+		echo -e "$(CLR_GREEN)[✔] Created prometheus/prometheus.yml.$(CLR_RESET)"; \
+	fi; \
+	grep -q '^METRICS_ENABLED=' .env && sed -i -E "s|^METRICS_ENABLED=.*|METRICS_ENABLED=true|" .env || echo "METRICS_ENABLED=true" >> .env; \
+	grep -q '^TRAEFIK_METRICS_ADD_ROUTERS_LABELS=' .env && sed -i -E "s|^TRAEFIK_METRICS_ADD_ROUTERS_LABELS=.*|TRAEFIK_METRICS_ADD_ROUTERS_LABELS=$$mt_routers_val|" .env || echo "TRAEFIK_METRICS_ADD_ROUTERS_LABELS=$$mt_routers_val" >> .env; \
+	grep -q '^TRAEFIK_METRICS_ADD_SERVICES_LABELS=' .env && sed -i -E "s|^TRAEFIK_METRICS_ADD_SERVICES_LABELS=.*|TRAEFIK_METRICS_ADD_SERVICES_LABELS=$$mt_services_val|" .env || echo "TRAEFIK_METRICS_ADD_SERVICES_LABELS=$$mt_services_val" >> .env; \
+	grep -q '^TRAEFIK_METRICS_ADD_INTERNALS=' .env && sed -i -E "s|^TRAEFIK_METRICS_ADD_INTERNALS=.*|TRAEFIK_METRICS_ADD_INTERNALS=$$mt_int_val|" .env || echo "TRAEFIK_METRICS_ADD_INTERNALS=$$mt_int_val" >> .env; \
+	grep -q '^TRAEFIK_METRICS_BUCKETS=' .env && sed -i -E "s|^TRAEFIK_METRICS_BUCKETS=.*|TRAEFIK_METRICS_BUCKETS=$$mt_buckets|" .env || echo "TRAEFIK_METRICS_BUCKETS=$$mt_buckets" >> .env; \
+	curr_prof=$$(grep -E '^COMPOSE_PROFILES=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	if [ "$$use_prom" = "true" ]; then \
+		new_prof=$$(echo "$$curr_prof,metrics" | tr ',' '\n' | grep -v '^$$' | awk '!seen[$$0]++' | paste -sd, -); \
+	else \
+		new_prof=$$(echo "$$curr_prof" | tr ',' '\n' | grep -v '^$$' | grep -v '^metrics$$' | awk '!seen[$$0]++' | paste -sd, -); \
+	fi; \
+	if grep -q '^COMPOSE_PROFILES=' .env; then \
+		sed -i -E "s|^COMPOSE_PROFILES=.*|COMPOSE_PROFILES=$$new_prof|" .env; \
+	else \
+		echo "COMPOSE_PROFILES=$$new_prof" >> .env; \
+	fi; \
+	sed -i -E 's|^[[:space:]]*#[[:space:]]*- "--entrypoints\.metrics\.|      - "--entrypoints.metrics.|' docker-compose.yml; \
+	sed -i -E 's|^[[:space:]]*#[[:space:]]*- "--metrics\.|      - "--metrics.|' docker-compose.yml; \
+	echo -e "$(CLR_GREEN)[✔] Prometheus Metrics enabled (Routers: $$mt_routers_val, Services: $$mt_services_val, Buckets: $$mt_buckets).$(CLR_RESET)"; \
+	if [ "$$use_prom" = "true" ]; then \
+		echo -e "$(CLR_CYAN)[i] Prometheus UI will be available on http://127.0.0.1:9090 (use SSH tunnel: ssh -L 9090:127.0.0.1:9090 user@server).$(CLR_RESET)"; \
+	else \
+		echo -e "$(CLR_CYAN)[i] Scrape endpoint available inside Docker network at http://traefik:8082/metrics.$(CLR_RESET)"; \
+	fi
+	@$(MAKE) --no-print-directory reload-if-running
+
+enable-metrics:
+	@$(MAKE) --no-print-directory setup-metrics FORCE_METRICS=1
+
+disable-metrics: init-env
+	@echo -e "$(CLR_YELLOW)[*] Disabling Prometheus Metrics Collection...$(CLR_RESET)"
+	@if grep -q '^METRICS_ENABLED=' .env; then \
+		sed -i -E "s|^METRICS_ENABLED=.*|METRICS_ENABLED=false|" .env; \
+	else \
+		echo "METRICS_ENABLED=false" >> .env; \
+	fi
+	@curr_prof=$$(grep -E '^COMPOSE_PROFILES=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	new_prof=$$(echo "$$curr_prof" | tr ',' '\n' | grep -v '^$$' | grep -v '^metrics$$' | awk '!seen[$$0]++' | paste -sd, -); \
+	if grep -q '^COMPOSE_PROFILES=' .env; then \
+		sed -i -E "s|^COMPOSE_PROFILES=.*|COMPOSE_PROFILES=$$new_prof|" .env; \
+	else \
+		echo "COMPOSE_PROFILES=$$new_prof" >> .env; \
+	fi
+	@sed -i -E 's|^[[:space:]]*- "--entrypoints\.metrics\.|      # - "--entrypoints.metrics.|' docker-compose.yml
+	@sed -i -E 's|^[[:space:]]*- "--metrics\.|      # - "--metrics.|' docker-compose.yml
+	@if command -v docker >/dev/null 2>&1; then \
+		if [ -n "$$(sudo docker compose ps -q prometheus 2>/dev/null)" ] || [ -n "$$(sudo docker ps -q -f name=^/prometheus$$ 2>/dev/null)" ]; then \
+			echo -e "$(CLR_YELLOW)[*] Stopping and removing Prometheus container...$(CLR_RESET)"; \
+			sudo docker compose stop prometheus 2>/dev/null || true; \
+			sudo docker compose rm -f prometheus 2>/dev/null || true; \
+		fi; \
+	fi
+	@echo -e "$(CLR_GREEN)[✔] Prometheus Metrics disabled.$(CLR_RESET)"
+	@$(MAKE) --no-print-directory reload-if-running
+
 # Color formatted status report box
 report: init-env
 	@AUTH_SET=$$(grep -E '^TRAEFIK_BASIC_AUTH_USERS=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
@@ -661,6 +778,7 @@ report: init-env
 	CS_KEY=$$(grep -E '^CROWDSEC_BOUNCER_KEY=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
 	CAP_PROV=$$(grep -E '^CROWDSEC_CAPTCHA_PROVIDER=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
 	CAP_SITE=$$(grep -E '^CROWDSEC_CAPTCHA_SITE_KEY=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	MT_ENABLED=$$(grep -E '^METRICS_ENABLED=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
 	TR_ENABLED=$$(grep -E '^TRACING_ENABLED=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
 	TR_RATE=$$(grep -E '^TRAEFIK_TRACING_SAMPLE_RATE=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
 	PORT_CHECK="Open (80, 443)"; \
@@ -678,6 +796,16 @@ report: init-env
 	grep -q '^[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"' docker-compose.yml 2>/dev/null && CS_SCOPE="All Endpoints (Global)"; \
 	CS_RUNNING="Stopped"; \
 	command -v docker >/dev/null 2>&1 && [ -n "$$(sudo docker compose ps -q crowdsec 2>/dev/null || sudo docker ps -q -f name=^/crowdsec$$ 2>/dev/null)" ] && CS_RUNNING="Running"; \
+	if [ "$$MT_ENABLED" = "true" ]; then \
+		PROM_RUNNING="Endpoint :8082 only"; \
+		if grep -E '^COMPOSE_PROFILES=' .env 2>/dev/null | grep -q 'metrics'; then \
+			PROM_RUNNING="Prometheus Stopped"; \
+			command -v docker >/dev/null 2>&1 && [ -n "$$(sudo docker compose ps -q prometheus 2>/dev/null || sudo docker ps -q -f name=^/prometheus$$ 2>/dev/null)" ] && PROM_RUNNING="Prometheus Running"; \
+		fi; \
+		MT_STATUS="Enabled ($$PROM_RUNNING)"; \
+	else \
+		MT_STATUS="Disabled"; \
+	fi; \
 	if [ "$$TR_ENABLED" = "true" ]; then \
 		JAEGER_RUNNING="External OTLP"; \
 		if grep -E '^COMPOSE_PROFILES=' .env 2>/dev/null | grep -q 'tracing'; then \
@@ -700,6 +828,7 @@ report: init-env
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "CrowdSec IPS (Bouncer)" "$$CS_STATUS ($$CS_RUNNING)"; \
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "CrowdSec Captcha" "$$CAP_STATUS"; \
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "CrowdSec Scope" "$$CS_SCOPE"; \
+	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "Prometheus Metrics" "$$MT_STATUS"; \
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "OpenTelemetry Tracing" "$$TR_STATUS"; \
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "Firewall Ports" "$$PORT_CHECK"; \
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)acme.json (perms: %-27s)$(CLR_CYAN)║$(CLR_RESET)\n" "ACME Storage" "$$PERM_CHECK"; \
@@ -731,7 +860,7 @@ check-docker:
 	fi
 
 # End-to-end setup orchestrator
-setup-all: init-env setup-firewall setup-certs setup-auth setup-acme setup-cloudflare setup-dashboard setup-crowdsec setup-tracing report reload-if-running
+setup-all: init-env setup-firewall setup-certs setup-auth setup-acme setup-cloudflare setup-dashboard setup-crowdsec setup-metrics setup-tracing report reload-if-running
 
 install-traefik: check-docker setup-all
 	@if [ -z "$$(sudo docker compose ps -q traefik 2>/dev/null)" ] && [ -z "$$(sudo docker ps -q -f name=^/traefik$$ 2>/dev/null)" ]; then \

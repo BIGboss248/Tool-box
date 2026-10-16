@@ -34,11 +34,15 @@ services:
       # Global Entrypoint Protection (uncomment to protect all websecure routes globally):
       # - "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"
 
-      # Observability / Metrics
-      - "--metrics.prometheus=true"
-      - "--metrics.prometheus.entrypoint=websecure"
-      - "--metrics.prometheus.addrouterslabels=true"
-      - "--metrics.prometheus.addserviceslabels=true"
+      # Prometheus Metrics (managed via 'make setup-metrics' / 'make disable-metrics'):
+      # - "--entrypoints.metrics.address=:8082"
+      # - "--metrics.addinternals=${TRAEFIK_METRICS_ADD_INTERNALS:-false}"
+      # - "--metrics.prometheus=true"
+      # - "--metrics.prometheus.entrypoint=${TRAEFIK_METRICS_ENTRYPOINT:-metrics}"
+      # - "--metrics.prometheus.addentrypointslabels=${TRAEFIK_METRICS_ADD_ENTRYPOINTS_LABELS:-true}"
+      # - "--metrics.prometheus.addrouterslabels=${TRAEFIK_METRICS_ADD_ROUTERS_LABELS:-true}"
+      # - "--metrics.prometheus.addserviceslabels=${TRAEFIK_METRICS_ADD_SERVICES_LABELS:-true}"
+      # - "--metrics.prometheus.buckets=${TRAEFIK_METRICS_BUCKETS:-0.1,0.3,1.2,5.0}"
 
       # OpenTelemetry Distributed Tracing (managed via 'make setup-tracing' / 'make disable-tracing'):
       # - "--tracing.servicename=${TRAEFIK_TRACING_SERVICE_NAME:-traefik}"
@@ -181,9 +185,32 @@ services:
     networks:
       - my_network
 
+  prometheus:
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:latest}
+    container_name: prometheus
+    hostname: prometheus
+    restart: unless-stopped
+    profiles:
+      - metrics
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus:rw
+    ports:
+      - "${PROMETHEUS_UI_BIND:-127.0.0.1}:9090:9090"
+    labels:
+      - "traefik.enable=false"
+    networks:
+      - my_network
+
 volumes:
   crowdsec-config:
   crowdsec-data:
+  prometheus-data:
 
 networks:
   my_network:
