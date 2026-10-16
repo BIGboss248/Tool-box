@@ -28,6 +28,9 @@ services:
       - "--entrypoints.websecure.address=:443"
       - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
       - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      # Trust Cloudflare Proxies & local Docker/reverse proxies so Traefik logs and uses the client's real IP:
+      - "--entrypoints.web.forwardedheaders.trustedips=173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22,2400:cb00::/32,2606:4700::/32,2803:f800::/32,2405:b500::/32,2405:8100::/32,2a06:98c0::/29,2c0f:f248::/32,127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+      - "--entrypoints.websecure.forwardedheaders.trustedips=173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22,2400:cb00::/32,2606:4700::/32,2803:f800::/32,2405:b500::/32,2405:8100::/32,2a06:98c0::/29,2c0f:f248::/32,127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
       # Global Entrypoint Protection (uncomment to protect all websecure routes globally):
       # - "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"
 
@@ -76,6 +79,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./acme.json:/acme.json:rw
       - ./logs:/logs:rw
+      - ./crowdsec/captcha.html:/captcha.html:ro
 
     healthcheck:
       test: ["CMD", "traefik", "healthcheck", "--ping"]
@@ -101,13 +105,27 @@ services:
 
       # CrowdSec Bouncer Middleware Definition
       - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.enabled=${CROWDSEC_ENABLED:-false}"
-      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.crowdsecmode=stream"
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.loglevel=${TRAEFIK_LOG_LEVEL:-INFO}"
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.crowdsecmode=${CROWDSEC_MODE:-stream}"
       - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.crowdseclapihost=crowdsec:8080"
       - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.crowdseclapischeme=http"
-      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.crowdseclapikey=${CROWDSEC_BOUNCER_KEY:-}"
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.crowdseclapikey=${CROWDSEC_BOUNCER_KEY:-disabled-placeholder-key}"
       - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.updateintervalseconds=60"
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.updatemaxfailure=-1"
       - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.defaultdecisionseconds=60"
       - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.streamstartupblock=false"
+
+      # Behind-Proxy (Cloudflare & Local Reverse Proxy) Real Client IP Extraction
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.forwardedheaderscustomname=X-Forwarded-For"
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.forwardedheaderstrustedips=173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22,2400:cb00::/32,2606:4700::/32,2803:f800::/32,2405:b500::/32,2405:8100::/32,2a06:98c0::/29,2c0f:f248::/32,127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.clienttrustedips=127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+
+      # CrowdSec Captcha Remediation (hcaptcha, recaptcha, or turnstile)
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.captchaprovider=${CROWDSEC_CAPTCHA_PROVIDER:-}"
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.captchasitekey=${CROWDSEC_CAPTCHA_SITE_KEY:-}"
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.captchasecretkey=${CROWDSEC_CAPTCHA_SECRET_KEY:-}"
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.captchagraceperiodseconds=${CROWDSEC_CAPTCHA_GRACE_PERIOD:-1800}"
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.captchahtmlfilepath=/captcha.html"
 
       # Authentication Middleware (Basic Auth from .env)
       - "traefik.http.middlewares.dashboard-auth.basicauth.users=${TRAEFIK_BASIC_AUTH_USERS}"
@@ -123,15 +141,23 @@ services:
     profiles:
       - crowdsec
     environment:
+      CUSTOM_HOSTNAME: crowdsec
       BOUNCER_KEY_TRAEFIK: ${CROWDSEC_BOUNCER_KEY:-}
       COLLECTIONS: "crowdsecurity/traefik crowdsecurity/http-cve crowdsecurity/whitelist-good-actors crowdsecurity/base-http-scenarios"
     volumes:
       - ./crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml:ro
-      - ./crowdsec/config:/etc/crowdsec:rw
-      - ./crowdsec/data:/var/lib/crowdsec/data:rw
+      - ./crowdsec/profiles.yaml:/etc/crowdsec/profiles.yaml:ro
+      - crowdsec-config:/etc/crowdsec:rw
+      - crowdsec-data:/var/lib/crowdsec/data:rw
       - ./logs:/var/log/traefik:ro
+    labels:
+      - "traefik.enable=false"
     networks:
       - my_network
+
+volumes:
+  crowdsec-config:
+  crowdsec-data:
 
 networks:
   my_network:

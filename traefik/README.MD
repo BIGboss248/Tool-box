@@ -48,25 +48,129 @@ The Makefile includes individual idempotent setup targets as well as an automate
 | `make setup-acme` | Sets ACME registration email or allows skipping. |
 | `make setup-cloudflare` | Configures Cloudflare DNS API token or allows skipping. |
 | `make setup-dashboard` | Prompts for dashboard domain and TLS resolver (`myresolver` vs `cloudflare_resolver`). |
-| `make setup-crowdsec` | Interactively enables CrowdSec IPS, prompts/auto-generates API key, selects scope, and tails verification logs. |
+| `make setup-crowdsec` | Interactively enables CrowdSec IPS, prompts/auto-generates API key, configures Captcha remediation, selects scope, and tails verification logs. |
+| `make setup-captcha` | Interactively configures or updates the CrowdSec Captcha provider (`turnstile`, `hcaptcha`, `recaptcha`), keys, grace period, and remediation profile (`profiles.yaml`). |
 | `make disable-crowdsec`| Disables CrowdSec IPS, stops the CrowdSec container, and updates Traefik. |
 | `make enable-crowdsec-all` | Protects ALL services globally via `websecure` entrypoint and restarts Traefik. |
 | `make disable-crowdsec-all`| Reverts to per-service protection (disables global entrypoint middleware). |
-| `make report` | Displays an ASCII colored status box of all configurations, scopes, and system states. |
-| `make crowdsec-report`| Displays a detailed CrowdSec report (registered bouncers, active bans, metrics). |
+| `make report` | Displays an ASCII colored status box of all configurations, Captcha status, scopes, and system states. |
+| `make crowdsec-report`| Displays a detailed CrowdSec report (registered bouncers, active bans/captchas, metrics). |
+| `make crowdsec-bans`  | Displays active CrowdSec IP bans & captcha decisions (alias: `make bans`). |
+| `make captcha-test`   | Adds a test 4-hour `captcha` decision for an IP (`make captcha-test IP=x.x.x.x`). |
+| `make crowdsec-unban` | Removes active ban/captcha decisions for an IP interactively or via `make crowdsec-unban IP=x.x.x.x` (alias: `make unban`). |
 | `make logs-crowdsec` | Follows live logs from the CrowdSec container. |
 | `make install-traefik` | Runs `setup-all` and launches Traefik with `docker compose up -d`. |
 
-## CrowdSec Intrusion Prevention (IPS) & Bouncer
+## CrowdSec Intrusion Prevention (IPS), Behind-Proxy & Captcha Remediation
 
 CrowdSec is integrated using the [CrowdSec Bouncer Traefik Plugin](https://plugins.traefik.io/plugins/6335346ca4caa9ddeffda116/crowdsec-bouncer-traefik-plugin):
-- **Log Acquisition**: CrowdSec parses Traefik's access log (`./logs/access.log`) using `crowdsecurity/traefik`.
-- **Decision Enforcement**: The bouncer plugin runs in **stream mode** inside Traefik, fetching decisions periodically into an in-memory cache to prevent any latency overhead on HTTP requests.
-- **Enable on Running Instance**: Run `make setup-crowdsec` (prompts for API key, global scope selection, and tails live logs).
+- **Log Acquisition**: CrowdSec parses Traefik's access log (`./logs/access.log`) via `./crowdsec/acquis.yaml` using the `crowdsecurity/traefik`, `crowdsecurity/http-cve`, `crowdsecurity/base-http-scenarios`, and `crowdsecurity/whitelist-good-actors` collections.
+- **Behind-Proxy (Cloudflare & Local Reverse Proxy)**:
+  - Traefik entrypoints (`web` and `websecure`) and the CrowdSec Bouncer plugin (`forwardedheaderstrustedips`) both trust Cloudflare IPv4/IPv6 CIDR ranges and private Docker/LAN ranges via `X-Forwarded-For`, preventing IP spoofing on direct connections while accurately extracting the real client IP behind Cloudflare.
+  - Internal LAN/Docker ranges (`127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`) are whitelisted in `clienttrustedips`.
+- **Decision Enforcement**: The bouncer plugin runs in **stream mode** inside Traefik (`updatemaxfailure=-1`, `streamstartupblock=false`), syncing decisions every 60s into an in-memory cache with zero latency overhead on HTTP requests.
+- **Enable on Running Instance**: Run `make setup-crowdsec`.
 - **Protect All Endpoints (Zero Labels)**: Run `make enable-crowdsec-all` to protect all services routed via port 443 automatically.
 - **Per-Service Mode**: Run `make disable-crowdsec-all` to only protect services explicitly labeled with `crowdsec-bouncer@docker`.
-- **Detailed Security Report**: Run `make crowdsec-report` to view active bans, bouncer status, and parsed metrics.
+- **Detailed Security Report**: Run `make crowdsec-report` to view active bans/captchas, bouncer status, and parsed metrics.
 - **Live Logs**: Run `make logs-crowdsec` to monitor the CrowdSec engine.
 - **Disable Anytime**: Run `make disable-crowdsec`.
+
+---
+
+## Detailed Guide: Setting Up CrowdSec Captcha Remediation
+
+CrowdSec supports two remediation actions in Traefik:
+1. **`ban`**: Immediately returns `HTTP 403 Forbidden`.
+2. **`captcha`**: Renders `/captcha.html` (`./crowdsec/captcha.html`) challenging the user with **Cloudflare Turnstile**, **hCaptcha**, or **Google reCAPTCHA v2**. Once solved, the user's IP is marked clean in Traefik's cache for the configured grace period (`1800` seconds / 30 minutes by default) and redirected back to the original page.
+
+### Step 1: Obtain a Site Key & Secret Key from a Captcha Provider
+
+Choose one of the 3 supported providers:
+
+#### Option A: Cloudflare Turnstile *(Recommended)*
+1. Go to the [Cloudflare Dashboard](https://dash.cloudflare.com/) -> **Turnstile** -> **Add Widget**.
+2. Enter a widget name and add your domain(s) (e.g., `yourdomain.com` or all subdomains).
+3. Select **Managed** (or Non-interactive / Invisible) widget mode and click **Create**.
+4. Copy the **Site Key** and **Secret Key**.
+
+#### Option B: hCaptcha
+1. Sign in to the [hCaptcha Dashboard](https://dashboard.hcaptcha.com/).
+2. Go to **Sites** -> **New Site** and add your domain(s) -> copy the **Sitekey**.
+3. Go to **Settings** -> copy your account **Secret Key**.
+
+#### Option C: Google reCAPTCHA v2
+1. Go to the [Google reCAPTCHA Admin Console](https://www.google.com/recaptcha/admin/create).
+2. Choose **Challenge (v2)** -> **"I'm not a robot" Checkbox** (note: use reCAPTCHA v2 Challenge, not v3 score-based).
+3. Add your domain(s) and submit.
+4. Copy the **Site Key** and **Secret Key**.
+
+---
+
+### Step 2: Configure Captcha (Interactive or Manual)
+
+#### Method 1: Interactive Setup via Makefile *(Recommended)*
+Run:
+```bash
+make setup-captcha
+```
+*(Note: `make setup-captcha` is also called automatically during `make setup-crowdsec` and `make setup-all`.)*
+
+You will be prompted for:
+1. **Captcha Provider**:
+   - `1) Cloudflare Turnstile (turnstile)`
+   - `2) hCaptcha (hcaptcha)`
+   - `3) Google reCAPTCHA v2 (recaptcha)`
+   - `4) Disable Captcha (use HTTP 403 Ban only)`
+2. **Site Key & Secret Key**: Paste the keys from Step 1.
+3. **Grace Period**: How long (in seconds) a user can browse after solving a Captcha before being re-challenged if their decision is still active (default: `1800` = 30 minutes).
+4. **CrowdSec Remediation Profile Mode**:
+   - `1) Mixed (Recommended)`: Writes `./crowdsec/profiles.yaml` so the **first 3 HTTP scenario alerts within 24 hours** receive a `4h` **`captcha`** challenge, and **4+ alerts** (or non-HTTP scenarios) escalate to a `4h` **`ban`**.
+   - `2) Captcha-only`: Copies `./crowdsec/profiles_captcha_only.yaml` to `./crowdsec/profiles.yaml` so all HTTP scenario alerts trigger a `captcha` challenge.
+
+`make setup-captcha` automatically ensures `./crowdsec/captcha.html` is downloaded, saves the settings to `.env`, and recreates Traefik/CrowdSec if running.
+
+#### Method 2: Manual Setup via `.env`
+Edit `.env` directly:
+```dotenv
+CROWDSEC_CAPTCHA_PROVIDER=turnstile
+CROWDSEC_CAPTCHA_SITE_KEY=0x4AAAAAA...
+CROWDSEC_CAPTCHA_SECRET_KEY=0x4AAAAAA...
+CROWDSEC_CAPTCHA_GRACE_PERIOD=1800
+```
+Then apply the changes:
+```bash
+make restart
+```
+
+---
+
+### Step 3: Verify & Test Captcha Challenges
+
+1. **Check Configuration Status**:
+   ```bash
+   make report
+   ```
+   Verify that `CrowdSec Captcha` shows `Enabled (turnstile|hcaptcha|recaptcha)`.
+
+2. **Trigger a Manual Test Captcha on an IP**:
+   > **Note**: Internal LAN/Docker IPs (`127.0.0.1/32`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`) are in `clienttrustedips` and bypass CrowdSec checks. Test using an external IP (e.g., your public IP or mobile data IP):
+   ```bash
+   make captcha-test IP=203.0.113.50
+   ```
+   *(Wait up to 60 seconds in `stream` mode for Traefik's bouncer cache to sync with CrowdSec LAPI.)*
+
+3. **View Active Decisions**:
+   ```bash
+   make bans
+   ```
+   You will see the decision listed with action `captcha`.
+
+4. **Remove the Test Decision**:
+   ```bash
+   make unban IP=203.0.113.50
+   ```
+
+
 
 
