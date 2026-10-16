@@ -40,6 +40,13 @@ services:
       - "--metrics.prometheus.addrouterslabels=true"
       - "--metrics.prometheus.addserviceslabels=true"
 
+      # OpenTelemetry Distributed Tracing (managed via 'make setup-tracing' / 'make disable-tracing'):
+      # - "--tracing.servicename=${TRAEFIK_TRACING_SERVICE_NAME:-traefik}"
+      # - "--tracing.samplerate=${TRAEFIK_TRACING_SAMPLE_RATE:-1.0}"
+      # - "--tracing.addinternals=${TRAEFIK_TRACING_ADD_INTERNALS:-false}"
+      # - "--tracing.otlp.http=true"
+      # - "--tracing.otlp.http.endpoint=${TRAEFIK_TRACING_OTLP_HTTP_ENDPOINT:-http://jaeger:4318/v1/traces}"
+
       # Access Logs
       - "--accesslog=true"
       - "--accesslog.format=${TRAEFIK_ACCESS_LOG_FORMAT:-json}"
@@ -80,6 +87,7 @@ services:
       - ./acme.json:/acme.json:rw
       - ./logs:/logs:rw
       - ./crowdsec/captcha.html:/captcha.html:ro
+      - ./crowdsec/ban.html:/ban.html:ro
 
     healthcheck:
       test: ["CMD", "traefik", "healthcheck", "--ping"]
@@ -114,6 +122,8 @@ services:
       - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.updatemaxfailure=-1"
       - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.defaultdecisionseconds=60"
       - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.streamstartupblock=false"
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.banfilepath=/ban.html"
+      - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.traceheaderscustomname=traceparent"
 
       # Behind-Proxy (Cloudflare & Local Reverse Proxy) Real Client IP Extraction
       - "traefik.http.middlewares.crowdsec-bouncer.plugin.crowdsec-bouncer.forwardedheaderscustomname=X-Forwarded-For"
@@ -150,6 +160,22 @@ services:
       - crowdsec-config:/etc/crowdsec:rw
       - crowdsec-data:/var/lib/crowdsec/data:rw
       - ./logs:/var/log/traefik:ro
+    labels:
+      - "traefik.enable=false"
+    networks:
+      - my_network
+
+  jaeger:
+    image: ${JAEGER_IMAGE:-jaegertracing/all-in-one:latest}
+    container_name: jaeger
+    hostname: jaeger
+    restart: unless-stopped
+    profiles:
+      - tracing
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "${JAEGER_UI_BIND:-127.0.0.1}:16686:16686"
     labels:
       - "traefik.enable=false"
     networks:

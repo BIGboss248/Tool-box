@@ -1,6 +1,6 @@
 SHELL = /bin/bash
 
-.PHONY: help check-docker setup-all setup-firewall setup-certs setup-auth setup-acme setup-cloudflare setup-dashboard setup-crowdsec setup-captcha disable-crowdsec enable-crowdsec enable-crowdsec-all disable-crowdsec-all enable-crowdsec-global disable-crowdsec-global report crowdsec-report cs-report crowdsec-bans bans cs-bans crowdsec-decisions crowdsec-captcha-test captcha-test crowdsec-unban unban logs-crowdsec install-traefik restart reload-if-running
+.PHONY: help check-docker setup-all setup-firewall setup-certs setup-auth setup-acme setup-cloudflare setup-dashboard setup-crowdsec setup-captcha disable-crowdsec enable-crowdsec enable-crowdsec-all disable-crowdsec-all enable-crowdsec-global disable-crowdsec-global setup-tracing enable-tracing disable-tracing report crowdsec-report cs-report crowdsec-bans bans cs-bans crowdsec-decisions crowdsec-captcha-test captcha-test crowdsec-unban unban logs-crowdsec install-traefik restart reload-if-running
 
 # Color definitions
 CLR_RESET   = \033[0m
@@ -27,6 +27,8 @@ help:
 	@echo -e "  $(CLR_GREEN)make disable-crowdsec$(CLR_RESET)   - Disable CrowdSec IPS & stop CrowdSec container"
 	@echo -e "  $(CLR_GREEN)make enable-crowdsec-all$(CLR_RESET)- Protect ALL endpoints globally via websecure entrypoint & restart"
 	@echo -e "  $(CLR_GREEN)make disable-crowdsec-all$(CLR_RESET)- Revert to per-service protection (disable global entrypoint)"
+	@echo -e "  $(CLR_GREEN)make setup-tracing$(CLR_RESET)      - Configure & enable OpenTelemetry Tracing (Jaeger UI or custom OTLP)"
+	@echo -e "  $(CLR_GREEN)make disable-tracing$(CLR_RESET)    - Disable OpenTelemetry Tracing & stop Jaeger container"
 	@echo -e "  $(CLR_GREEN)make report$(CLR_RESET)             - Display colored summary box of current Traefik configuration"
 	@echo -e "  $(CLR_GREEN)make crowdsec-report$(CLR_RESET)    - Display detailed CrowdSec report (bouncers, active bans, metrics)"
 	@echo -e "  $(CLR_GREEN)make crowdsec-bans$(CLR_RESET)      - View active CrowdSec IP bans & captcha decisions (alias: make bans)"
@@ -259,15 +261,22 @@ setup-crowdsec: init-env
 		curl -fsSL https://raw.githubusercontent.com/maxlerebourg/crowdsec-bouncer-traefik-plugin/main/captcha.html -o ./crowdsec/captcha.html; \
 		echo -e "$(CLR_GREEN)[✔] Downloaded crowdsec/captcha.html.$(CLR_RESET)"; \
 	fi; \
+	if [ ! -f ./crowdsec/ban.html ]; then \
+		echo -e "$(CLR_YELLOW)[*] Downloading official CrowdSec Ban HTML template...$(CLR_RESET)"; \
+		curl -fsSL https://raw.githubusercontent.com/maxlerebourg/crowdsec-bouncer-traefik-plugin/main/ban.html -o ./crowdsec/ban.html; \
+		echo -e "$(CLR_GREEN)[✔] Downloaded crowdsec/ban.html.$(CLR_RESET)"; \
+	fi; \
 	if grep -q '^CROWDSEC_ENABLED=' .env; then \
 		sed -i -E "s|^CROWDSEC_ENABLED=.*|CROWDSEC_ENABLED=true|" .env; \
 	else \
 		echo "CROWDSEC_ENABLED=true" >> .env; \
 	fi; \
+	curr_prof=$$(grep -E '^COMPOSE_PROFILES=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	new_prof=$$(echo "$$curr_prof,crowdsec" | tr ',' '\n' | grep -v '^$$' | awk '!seen[$$0]++' | paste -sd, -); \
 	if grep -q '^COMPOSE_PROFILES=' .env; then \
-		sed -i -E "s|^COMPOSE_PROFILES=.*|COMPOSE_PROFILES=crowdsec|" .env; \
+		sed -i -E "s|^COMPOSE_PROFILES=.*|COMPOSE_PROFILES=$$new_prof|" .env; \
 	else \
-		echo "COMPOSE_PROFILES=crowdsec" >> .env; \
+		echo "COMPOSE_PROFILES=$$new_prof" >> .env; \
 	fi; \
 	if grep -q '^CROWDSEC_BOUNCER_KEY=' .env; then \
 		sed -i -E "s|^CROWDSEC_BOUNCER_KEY=.*|CROWDSEC_BOUNCER_KEY=$$key_input|" .env; \
@@ -524,10 +533,12 @@ disable-crowdsec: init-env
 	else \
 		echo "CROWDSEC_ENABLED=false" >> .env; \
 	fi
-	@if grep -q '^COMPOSE_PROFILES=' .env; then \
-		sed -i -E "s|^COMPOSE_PROFILES=.*|COMPOSE_PROFILES=|" .env; \
+	@curr_prof=$$(grep -E '^COMPOSE_PROFILES=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	new_prof=$$(echo "$$curr_prof" | tr ',' '\n' | grep -v '^$$' | grep -v '^crowdsec$$' | awk '!seen[$$0]++' | paste -sd, -); \
+	if grep -q '^COMPOSE_PROFILES=' .env; then \
+		sed -i -E "s|^COMPOSE_PROFILES=.*|COMPOSE_PROFILES=$$new_prof|" .env; \
 	else \
-		echo "COMPOSE_PROFILES=" >> .env; \
+		echo "COMPOSE_PROFILES=$$new_prof" >> .env; \
 	fi
 	@if grep -q '^[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"' docker-compose.yml; then \
 		sed -i -E 's|^[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|      # - "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|' docker-compose.yml; \
@@ -542,6 +553,103 @@ disable-crowdsec: init-env
 	@echo -e "$(CLR_GREEN)[✔] CrowdSec disabled successfully.$(CLR_RESET)"
 	@$(MAKE) --no-print-directory reload-if-running
 
+# 6. Optional OpenTelemetry Distributed Tracing (Traefik v3.7 OTLP + Jaeger UI)
+setup-tracing: init-env
+	@tr_enabled=$$(grep -E '^TRACING_ENABLED=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	tr_ep=$$(grep -E '^TRAEFIK_TRACING_OTLP_HTTP_ENDPOINT=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	if [ "$$tr_enabled" = "true" ]; then \
+		echo -e "$(CLR_GREEN)[✔] OpenTelemetry Tracing already enabled (Endpoint: $${tr_ep:-http://jaeger:4318/v1/traces}).$(CLR_RESET)"; \
+		read -p "Do you want to reconfigure OpenTelemetry Tracing? [y/N]: " reconf_tr </dev/tty; \
+		if [ "$$reconf_tr" != "y" ] && [ "$$reconf_tr" != "Y" ]; then \
+			exit 0; \
+		fi; \
+	fi; \
+	echo -e "$(CLR_YELLOW)[*] Optional OpenTelemetry Distributed Tracing (Traefik v3.7 OTLP):$(CLR_RESET)"; \
+	if [ "$(FORCE_TRACING)" = "1" ]; then \
+		read -p "Enable OpenTelemetry Tracing for Traefik? [Y/n, default Y]: " enable_tr </dev/tty; \
+		enable_tr=$${enable_tr:-Y}; \
+	else \
+		read -p "Enable OpenTelemetry Tracing for Traefik? [y/N, default N]: " enable_tr </dev/tty; \
+		enable_tr=$${enable_tr:-N}; \
+	fi; \
+	if [ "$$enable_tr" != "y" ] && [ "$$enable_tr" != "Y" ]; then \
+		$(MAKE) --no-print-directory disable-tracing; \
+		exit 0; \
+	fi; \
+	echo "Select OTLP Trace Collector backend:"; \
+	echo "  1) Built-in Jaeger All-in-One container (http://jaeger:4318/v1/traces + Jaeger UI on port 16686) [recommended]"; \
+	echo "  2) External OTLP HTTP Collector (Grafana Tempo, SigNoz, OpenTelemetry Collector, etc.)"; \
+	read -p "Choose [1/2, default 1]: " tr_backend </dev/tty; \
+	tr_backend=$${tr_backend:-1}; \
+	if [ "$$tr_backend" = "2" ]; then \
+		read -p "Enter OTLP HTTP endpoint URL [http://localhost:4318/v1/traces]: " otlp_ep </dev/tty; \
+		otlp_ep=$${otlp_ep:-http://localhost:4318/v1/traces}; \
+		use_jaeger="false"; \
+	else \
+		otlp_ep="http://jaeger:4318/v1/traces"; \
+		use_jaeger="true"; \
+	fi; \
+	read -p "Enter Traefik tracing service name [default traefik]: " tr_svc </dev/tty; \
+	tr_svc=$${tr_svc:-traefik}; \
+	read -p "Enter trace sampling rate (0.0 to 1.0, e.g. 1.0 = 100%, 0.1 = 10%) [default 1.0]: " tr_rate </dev/tty; \
+	tr_rate=$${tr_rate:-1.0}; \
+	read -p "Trace internal Traefik routers/services (addInternals)? [y/N, default N]: " tr_int </dev/tty; \
+	if [ "$$tr_int" = "y" ] || [ "$$tr_int" = "Y" ]; then \
+		tr_internals="true"; \
+	else \
+		tr_internals="false"; \
+	fi; \
+	grep -q '^TRACING_ENABLED=' .env && sed -i -E "s|^TRACING_ENABLED=.*|TRACING_ENABLED=true|" .env || echo "TRACING_ENABLED=true" >> .env; \
+	grep -q '^TRAEFIK_TRACING_SERVICE_NAME=' .env && sed -i -E "s|^TRAEFIK_TRACING_SERVICE_NAME=.*|TRAEFIK_TRACING_SERVICE_NAME=$$tr_svc|" .env || echo "TRAEFIK_TRACING_SERVICE_NAME=$$tr_svc" >> .env; \
+	grep -q '^TRAEFIK_TRACING_SAMPLE_RATE=' .env && sed -i -E "s|^TRAEFIK_TRACING_SAMPLE_RATE=.*|TRAEFIK_TRACING_SAMPLE_RATE=$$tr_rate|" .env || echo "TRAEFIK_TRACING_SAMPLE_RATE=$$tr_rate" >> .env; \
+	grep -q '^TRAEFIK_TRACING_ADD_INTERNALS=' .env && sed -i -E "s|^TRAEFIK_TRACING_ADD_INTERNALS=.*|TRAEFIK_TRACING_ADD_INTERNALS=$$tr_internals|" .env || echo "TRAEFIK_TRACING_ADD_INTERNALS=$$tr_internals" >> .env; \
+	grep -q '^TRAEFIK_TRACING_OTLP_HTTP_ENDPOINT=' .env && sed -i -E "s|^TRAEFIK_TRACING_OTLP_HTTP_ENDPOINT=.*|TRAEFIK_TRACING_OTLP_HTTP_ENDPOINT=$$otlp_ep|" .env || echo "TRAEFIK_TRACING_OTLP_HTTP_ENDPOINT=$$otlp_ep" >> .env; \
+	curr_prof=$$(grep -E '^COMPOSE_PROFILES=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	if [ "$$use_jaeger" = "true" ]; then \
+		new_prof=$$(echo "$$curr_prof,tracing" | tr ',' '\n' | grep -v '^$$' | awk '!seen[$$0]++' | paste -sd, -); \
+	else \
+		new_prof=$$(echo "$$curr_prof" | tr ',' '\n' | grep -v '^$$' | grep -v '^tracing$$' | awk '!seen[$$0]++' | paste -sd, -); \
+	fi; \
+	if grep -q '^COMPOSE_PROFILES=' .env; then \
+		sed -i -E "s|^COMPOSE_PROFILES=.*|COMPOSE_PROFILES=$$new_prof|" .env; \
+	else \
+		echo "COMPOSE_PROFILES=$$new_prof" >> .env; \
+	fi; \
+	sed -i -E 's|^[[:space:]]*#[[:space:]]*- "--tracing\.|      - "--tracing.|' docker-compose.yml; \
+	echo -e "$(CLR_GREEN)[✔] OpenTelemetry Tracing enabled (Endpoint: $$otlp_ep, Sample Rate: $$tr_rate).$(CLR_RESET)"; \
+	if [ "$$use_jaeger" = "true" ]; then \
+		echo -e "$(CLR_CYAN)[i] Jaeger UI will be available on http://127.0.0.1:16686 (use SSH tunnel: ssh -L 16686:127.0.0.1:16686 user@server).$(CLR_RESET)"; \
+	fi
+	@$(MAKE) --no-print-directory reload-if-running
+
+enable-tracing:
+	@$(MAKE) --no-print-directory setup-tracing FORCE_TRACING=1
+
+disable-tracing: init-env
+	@echo -e "$(CLR_YELLOW)[*] Disabling OpenTelemetry Distributed Tracing...$(CLR_RESET)"
+	@if grep -q '^TRACING_ENABLED=' .env; then \
+		sed -i -E "s|^TRACING_ENABLED=.*|TRACING_ENABLED=false|" .env; \
+	else \
+		echo "TRACING_ENABLED=false" >> .env; \
+	fi
+	@curr_prof=$$(grep -E '^COMPOSE_PROFILES=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	new_prof=$$(echo "$$curr_prof" | tr ',' '\n' | grep -v '^$$' | grep -v '^tracing$$' | awk '!seen[$$0]++' | paste -sd, -); \
+	if grep -q '^COMPOSE_PROFILES=' .env; then \
+		sed -i -E "s|^COMPOSE_PROFILES=.*|COMPOSE_PROFILES=$$new_prof|" .env; \
+	else \
+		echo "COMPOSE_PROFILES=$$new_prof" >> .env; \
+	fi
+	@sed -i -E 's|^[[:space:]]*- "--tracing\.|      # - "--tracing.|' docker-compose.yml
+	@if command -v docker >/dev/null 2>&1; then \
+		if [ -n "$$(sudo docker compose ps -q jaeger 2>/dev/null)" ] || [ -n "$$(sudo docker ps -q -f name=^/jaeger$$ 2>/dev/null)" ]; then \
+			echo -e "$(CLR_YELLOW)[*] Stopping and removing Jaeger container...$(CLR_RESET)"; \
+			sudo docker compose stop jaeger 2>/dev/null || true; \
+			sudo docker compose rm -f jaeger 2>/dev/null || true; \
+		fi; \
+	fi
+	@echo -e "$(CLR_GREEN)[✔] OpenTelemetry Tracing disabled.$(CLR_RESET)"
+	@$(MAKE) --no-print-directory reload-if-running
+
 # Color formatted status report box
 report: init-env
 	@AUTH_SET=$$(grep -E '^TRAEFIK_BASIC_AUTH_USERS=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
@@ -553,6 +661,8 @@ report: init-env
 	CS_KEY=$$(grep -E '^CROWDSEC_BOUNCER_KEY=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
 	CAP_PROV=$$(grep -E '^CROWDSEC_CAPTCHA_PROVIDER=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
 	CAP_SITE=$$(grep -E '^CROWDSEC_CAPTCHA_SITE_KEY=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	TR_ENABLED=$$(grep -E '^TRACING_ENABLED=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	TR_RATE=$$(grep -E '^TRAEFIK_TRACING_SAMPLE_RATE=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
 	PORT_CHECK="Open (80, 443)"; \
 	sudo iptables -C INPUT -p tcp -m multiport --dports 80,443 -j ACCEPT 2>/dev/null || PORT_CHECK="Needs Attention"; \
 	PERM_CHECK="Not Set"; \
@@ -568,6 +678,16 @@ report: init-env
 	grep -q '^[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"' docker-compose.yml 2>/dev/null && CS_SCOPE="All Endpoints (Global)"; \
 	CS_RUNNING="Stopped"; \
 	command -v docker >/dev/null 2>&1 && [ -n "$$(sudo docker compose ps -q crowdsec 2>/dev/null || sudo docker ps -q -f name=^/crowdsec$$ 2>/dev/null)" ] && CS_RUNNING="Running"; \
+	if [ "$$TR_ENABLED" = "true" ]; then \
+		JAEGER_RUNNING="External OTLP"; \
+		if grep -E '^COMPOSE_PROFILES=' .env 2>/dev/null | grep -q 'tracing'; then \
+			JAEGER_RUNNING="Jaeger Stopped"; \
+			command -v docker >/dev/null 2>&1 && [ -n "$$(sudo docker compose ps -q jaeger 2>/dev/null || sudo docker ps -q -f name=^/jaeger$$ 2>/dev/null)" ] && JAEGER_RUNNING="Jaeger Running"; \
+		fi; \
+		TR_STATUS="Enabled (rate: $${TR_RATE:-1.0}, $$JAEGER_RUNNING)"; \
+	else \
+		TR_STATUS="Disabled"; \
+	fi; \
 	echo ""; \
 	echo -e "$(CLR_CYAN)╔══════════════════════════════════════════════════════════════════════════════╗$(CLR_RESET)"; \
 	echo -e "$(CLR_CYAN)║$(CLR_RESET)                   $(CLR_BOLD)$(CLR_WHITE)TRAEFIK CONFIGURATION & STATUS REPORT$(CLR_RESET)                      $(CLR_CYAN)║$(CLR_RESET)"; \
@@ -580,6 +700,7 @@ report: init-env
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "CrowdSec IPS (Bouncer)" "$$CS_STATUS ($$CS_RUNNING)"; \
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "CrowdSec Captcha" "$$CAP_STATUS"; \
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "CrowdSec Scope" "$$CS_SCOPE"; \
+	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "OpenTelemetry Tracing" "$$TR_STATUS"; \
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "Firewall Ports" "$$PORT_CHECK"; \
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)acme.json (perms: %-27s)$(CLR_CYAN)║$(CLR_RESET)\n" "ACME Storage" "$$PERM_CHECK"; \
 	echo -e "$(CLR_CYAN)╚══════════════════════════════════════════════════════════════════════════════╝$(CLR_RESET)"; \
@@ -610,7 +731,7 @@ check-docker:
 	fi
 
 # End-to-end setup orchestrator
-setup-all: init-env setup-firewall setup-certs setup-auth setup-acme setup-cloudflare setup-dashboard setup-crowdsec report reload-if-running
+setup-all: init-env setup-firewall setup-certs setup-auth setup-acme setup-cloudflare setup-dashboard setup-crowdsec setup-tracing report reload-if-running
 
 install-traefik: check-docker setup-all
 	@if [ -z "$$(sudo docker compose ps -q traefik 2>/dev/null)" ] && [ -z "$$(sudo docker ps -q -f name=^/traefik$$ 2>/dev/null)" ]; then \

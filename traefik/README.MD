@@ -53,7 +53,9 @@ The Makefile includes individual idempotent setup targets as well as an automate
 | `make disable-crowdsec`| Disables CrowdSec IPS, stops the CrowdSec container, and updates Traefik. |
 | `make enable-crowdsec-all` | Protects ALL services globally via `websecure` entrypoint and restarts Traefik. |
 | `make disable-crowdsec-all`| Reverts to per-service protection (disables global entrypoint middleware). |
-| `make report` | Displays an ASCII colored status box of all configurations, Captcha status, scopes, and system states. |
+| `make setup-tracing` | Interactively configures & enables OpenTelemetry (OTLP) Tracing with built-in Jaeger UI (`127.0.0.1:16686`) or a custom OTLP collector. |
+| `make disable-tracing` | Disables OpenTelemetry Tracing, comments out `--tracing.*` flags, and stops the Jaeger container. |
+| `make report` | Displays an ASCII colored status box of all configurations, Captcha status, Tracing status, scopes, and system states. |
 | `make crowdsec-report`| Displays a detailed CrowdSec report (registered bouncers, active bans/captchas, metrics). |
 | `make crowdsec-bans`  | Displays active CrowdSec IP bans & captcha decisions (alias: `make bans`). |
 | `make captcha-test`   | Adds a test 4-hour `captcha` decision for an IP (`make captcha-test IP=x.x.x.x`). |
@@ -68,7 +70,9 @@ CrowdSec is integrated using the [CrowdSec Bouncer Traefik Plugin](https://plugi
 - **Behind-Proxy (Cloudflare & Local Reverse Proxy)**:
   - Traefik entrypoints (`web` and `websecure`) and the CrowdSec Bouncer plugin (`forwardedheaderstrustedips`) both trust Cloudflare IPv4/IPv6 CIDR ranges and private Docker/LAN ranges via `X-Forwarded-For`, preventing IP spoofing on direct connections while accurately extracting the real client IP behind Cloudflare.
   - Internal LAN/Docker ranges (`127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`) are whitelisted in `clienttrustedips`.
-- **Decision Enforcement**: The bouncer plugin runs in **stream mode** inside Traefik (`updatemaxfailure=-1`, `streamstartupblock=false`), syncing decisions every 60s into an in-memory cache with zero latency overhead on HTTP requests.
+- **Decision Enforcement & Custom Ban Page**:
+  - The bouncer plugin runs in **stream mode** inside Traefik (`updatemaxfailure=-1`, `streamstartupblock=false`), syncing decisions every 60s into an in-memory cache with zero latency overhead on HTTP requests.
+  - `./crowdsec/ban.html` is mounted into the Traefik container at `/ban.html:ro` (`banfilepath=/ban.html`), so banned visitors receive a styled **CrowdSec Access Forbidden** HTML page (displaying `{{ .ClientIP }}` and `{{ .RemediationReason }}`) along with `HTTP 403` instead of a blank browser error page.
 - **Enable on Running Instance**: Run `make setup-crowdsec`.
 - **Protect All Endpoints (Zero Labels)**: Run `make enable-crowdsec-all` to protect all services routed via port 443 automatically.
 - **Per-Service Mode**: Run `make disable-crowdsec-all` to only protect services explicitly labeled with `crowdsec-bouncer@docker`.
@@ -170,6 +174,26 @@ make restart
    ```bash
    make unban IP=203.0.113.50
    ```
+
+---
+
+## Optional OpenTelemetry Distributed Tracing (Traefik v3.7)
+
+Traefik v3.7 natively instruments HTTP requests using the **OpenTelemetry (OTLP)** standard and W3C Trace Context (`traceparent` / `tracestate` headers):
+- **Span Hierarchy**: For every sampled incoming request, Traefik creates a root entrypoint span, child spans for each middleware (including `crowdsec-bouncer` via `traceheaderscustomname=traceparent`), and a child span for the upstream backend service call, propagating `traceparent` so your backend apps can attach their own database/API spans to the same trace.
+- **Sampling**: Controlled via `TRAEFIK_TRACING_SAMPLE_RATE` (`0.0` to `1.0`, default `1.0` = 100%) using OpenTelemetry's `ParentBased(TraceIDRatioBased)` sampler.
+- **Enable Interactively**:
+  ```bash
+  make enable-tracing
+  ```
+  You can choose between:
+  1. **Built-in Jaeger All-in-One Container** (`tracing` Docker Compose profile): Automatically starts `jaegertracing/all-in-one:latest` receiving traces over `http://jaeger:4318/v1/traces` and exposing the Jaeger Web UI on `127.0.0.1:16686` (access via SSH port forwarding: `ssh -L 16686:127.0.0.1:16686 user@your-server` and open `http://localhost:16686`).
+  2. **External OTLP HTTP Collector**: Send traces to Grafana Tempo, SigNoz, Honeycomb, or an OpenTelemetry Collector at a custom URL.
+- **Disable Tracing on Specific Routers**: Add the label `- "traefik.http.routers.<router-name>.observability.tracing=false"` to any container where you want to skip tracing.
+- **Disable Tracing Globally**:
+  ```bash
+  make disable-tracing
+  ```
 
 
 
