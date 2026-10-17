@@ -1,6 +1,6 @@
 SHELL = /bin/bash
 
-.PHONY: help check-docker setup-all setup-firewall setup-certs setup-auth setup-acme setup-cloudflare setup-dashboard report install-traefik restart reload-if-running
+.PHONY: help check-docker setup-all setup-firewall setup-certs setup-auth setup-acme setup-cloudflare setup-dashboard setup-crowdsec setup-captcha disable-crowdsec enable-crowdsec enable-crowdsec-all disable-crowdsec-all enable-crowdsec-global disable-crowdsec-global setup-tracing enable-tracing disable-tracing setup-metrics enable-metrics disable-metrics report crowdsec-report cs-report crowdsec-bans bans cs-bans crowdsec-decisions crowdsec-captcha-test captcha-test crowdsec-unban unban logs-crowdsec install-traefik restart reload-if-running
 
 # Color definitions
 CLR_RESET   = \033[0m
@@ -22,7 +22,21 @@ help:
 	@echo -e "  $(CLR_GREEN)make setup-acme$(CLR_RESET)         - Configure Let's Encrypt / ACME email (allows skipping)"
 	@echo -e "  $(CLR_GREEN)make setup-cloudflare$(CLR_RESET)   - Configure Cloudflare API DNS Token (allows skipping)"
 	@echo -e "  $(CLR_GREEN)make setup-dashboard$(CLR_RESET)    - Configure Dashboard domain & resolver (Let's Encrypt / Cloudflare)"
+	@echo -e "  $(CLR_GREEN)make setup-crowdsec$(CLR_RESET)     - Configure & enable CrowdSec IPS, Bouncer & Captcha remediation"
+	@echo -e "  $(CLR_GREEN)make setup-captcha$(CLR_RESET)      - Configure CrowdSec Captcha provider (Turnstile, hCaptcha, reCAPTCHA)"
+	@echo -e "  $(CLR_GREEN)make disable-crowdsec$(CLR_RESET)   - Disable CrowdSec IPS & stop CrowdSec container"
+	@echo -e "  $(CLR_GREEN)make enable-crowdsec-all$(CLR_RESET)- Protect ALL endpoints globally via websecure entrypoint & restart"
+	@echo -e "  $(CLR_GREEN)make disable-crowdsec-all$(CLR_RESET)- Revert to per-service protection (disable global entrypoint)"
+	@echo -e "  $(CLR_GREEN)make setup-metrics$(CLR_RESET)      - Configure & enable Prometheus Metrics (Prometheus UI or endpoint only)"
+	@echo -e "  $(CLR_GREEN)make disable-metrics$(CLR_RESET)    - Disable Prometheus Metrics & stop Prometheus container"
+	@echo -e "  $(CLR_GREEN)make setup-tracing$(CLR_RESET)      - Configure & enable OpenTelemetry Tracing (Jaeger UI or custom OTLP)"
+	@echo -e "  $(CLR_GREEN)make disable-tracing$(CLR_RESET)    - Disable OpenTelemetry Tracing & stop Jaeger container"
 	@echo -e "  $(CLR_GREEN)make report$(CLR_RESET)             - Display colored summary box of current Traefik configuration"
+	@echo -e "  $(CLR_GREEN)make crowdsec-report$(CLR_RESET)    - Display detailed CrowdSec report (bouncers, active bans, metrics)"
+	@echo -e "  $(CLR_GREEN)make crowdsec-bans$(CLR_RESET)      - View active CrowdSec IP bans & captcha decisions (alias: make bans)"
+	@echo -e "  $(CLR_GREEN)make captcha-test$(CLR_RESET)       - Trigger a test Captcha challenge for an IP (make captcha-test IP=x.x.x.x)"
+	@echo -e "  $(CLR_GREEN)make crowdsec-unban$(CLR_RESET)     - Remove ban/captcha decisions for an IP (make crowdsec-unban IP=x.x.x.x)"
+	@echo -e "  $(CLR_GREEN)make logs-crowdsec$(CLR_RESET)      - Tail live logs from CrowdSec container"
 	@echo -e "  $(CLR_GREEN)make restart$(CLR_RESET)            - Restart Traefik containers via Docker Compose"
 	@echo -e "  $(CLR_GREEN)make install-traefik$(CLR_RESET)    - Run complete setup and launch Traefik containers"
 
@@ -52,8 +66,15 @@ setup-firewall:
 # 6. Setup certificate file with proper permissions (600)
 setup-certs:
 	@echo -e "$(CLR_CYAN)[*] Checking acme.json certificate storage...$(CLR_RESET)"
-	@if [ -f ./acme.json ] && [ "$$(stat -c '%a' ./acme.json 2>/dev/null || stat -f '%Lp' ./acme.json 2>/dev/null)" = "600" ]; then \
-		echo -e "$(CLR_GREEN)[✔] acme.json already exists with 600 permissions.$(CLR_RESET)"; \
+	@if [ -d ./acme.json ]; then \
+		echo -e "$(CLR_YELLOW)[!] acme.json is currently a directory (created by Docker volume mount). Replacing with file...$(CLR_RESET)"; \
+		rm -rf ./acme.json; \
+		touch ./acme.json; \
+		chmod 600 ./acme.json; \
+		echo -e "$(CLR_GREEN)[✔] acme.json recreated as regular file with 600 permissions.$(CLR_RESET)"; \
+	elif [ -f ./acme.json ]; then \
+		chmod 600 ./acme.json; \
+		echo -e "$(CLR_GREEN)[✔] acme.json exists with 600 permissions.$(CLR_RESET)"; \
 	else \
 		touch ./acme.json; \
 		chmod 600 ./acme.json; \
@@ -179,13 +200,587 @@ setup-dashboard: init-env
 	fi
 	@$(MAKE) --no-print-directory reload-if-running
 
+# 5. CrowdSec IPS, Traefik Bouncer & Captcha setup
+setup-crowdsec: init-env
+	@cs_enabled=$$(grep -E '^CROWDSEC_ENABLED=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	cs_key=$$(grep -E '^CROWDSEC_BOUNCER_KEY=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	if [ "$$cs_enabled" = "true" ] && [ -n "$$cs_key" ]; then \
+		echo -e "$(CLR_GREEN)[✔] CrowdSec already configured and enabled (Bouncer Key: $${cs_key:0:6}...$${cs_key: -4}).$(CLR_RESET)"; \
+		read -p "Do you want to reconfigure CrowdSec? [y/N]: " reconf </dev/tty; \
+		if [ "$$reconf" != "y" ] && [ "$$reconf" != "Y" ]; then \
+			exit 0; \
+		fi; \
+	fi; \
+	echo -e "$(CLR_YELLOW)[*] Configuring CrowdSec Intrusion Prevention System (IPS):$(CLR_RESET)"; \
+	read -p "Enable CrowdSec for Traefik? [Y/n, default Y]: " enable_cs </dev/tty; \
+	if [ "$$enable_cs" = "n" ] || [ "$$enable_cs" = "N" ]; then \
+		$(MAKE) --no-print-directory disable-crowdsec; \
+		exit 0; \
+	fi; \
+	echo -e "$(CLR_YELLOW)[*] Configuring CrowdSec Bouncer API Key:$(CLR_RESET)"; \
+	if [ -n "$$cs_key" ]; then \
+		echo -e "Existing Bouncer API Key detected in .env: $(CLR_CYAN)$$cs_key$(CLR_RESET)"; \
+		read -p "Enter new Bouncer Key or press Enter to keep existing [keep existing]: " key_input </dev/tty; \
+		if [ -z "$$key_input" ]; then \
+			key_input="$$cs_key"; \
+			echo -e "$(CLR_GREEN)[✔] Retained existing Bouncer API Key: $$key_input$(CLR_RESET)"; \
+		else \
+			echo -e "$(CLR_GREEN)[✔] Using new Bouncer API Key: $$key_input$(CLR_RESET)"; \
+		fi; \
+	else \
+		echo "Leave blank to auto-generate a secure random 32-character key."; \
+		read -p "Enter CrowdSec Bouncer Key [auto-generate]: " key_input </dev/tty; \
+		if [ -z "$$key_input" ]; then \
+			key_input=$$(openssl rand -hex 16 2>/dev/null || od -vN 16 -An -tx1 /dev/urandom 2>/dev/null | tr -d ' \n'); \
+			if [ -z "$$key_input" ]; then \
+				key_input=$$(date +%s%N | sha256sum | head -c 32); \
+			fi; \
+			echo -e "$(CLR_GREEN)[✔] Auto-generated Bouncer API Key: $$key_input$(CLR_RESET)"; \
+		else \
+			echo -e "$(CLR_GREEN)[✔] Using provided Bouncer API Key.$(CLR_RESET)"; \
+		fi; \
+	fi; \
+	read -p "Protect ALL endpoints/services globally via websecure entrypoint? [y/N, default N]: " global_cs </dev/tty; \
+	if [ "$$global_cs" = "y" ] || [ "$$global_cs" = "Y" ]; then \
+		sed -i -E 's|^[[:space:]]*#[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|      - "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|' docker-compose.yml; \
+		echo -e "$(CLR_GREEN)[✔] Global protection enabled on websecure entrypoint.$(CLR_RESET)"; \
+	else \
+		sed -i -E 's|^[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|      # - "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|' docker-compose.yml; \
+		echo -e "$(CLR_YELLOW)[✔] Global protection disabled (per-service router labels will be used).$(CLR_RESET)"; \
+	fi; \
+	mkdir -p ./crowdsec ./logs; \
+	touch ./logs/access.log; \
+	if [ ! -f ./crowdsec/acquis.yaml ]; then \
+		printf "filenames:\n  - /var/log/traefik/access.log\nlabels:\n  type: traefik\n" > ./crowdsec/acquis.yaml; \
+		echo -e "$(CLR_GREEN)[✔] Created crowdsec/acquis.yaml for Traefik access log acquisition.$(CLR_RESET)"; \
+	fi; \
+	if [ ! -f ./crowdsec/profiles.yaml ]; then \
+		printf "name: captcha_remediation\nfilters:\n  - Alert.Remediation == true && Alert.GetScope() == \"Ip\" && Alert.GetScenario() contains \"http\" && GetDecisionsSinceCount(Alert.GetValue(), \"24h\") <= 3\ndecisions:\n  - type: captcha\n    duration: 4h\non_success: break\n---\nname: default_ip_remediation\nfilters:\n  - Alert.Remediation == true && Alert.GetScope() == \"Ip\"\ndecisions:\n  - type: ban\n    duration: 4h\non_success: break\n" > ./crowdsec/profiles.yaml; \
+		echo -e "$(CLR_GREEN)[✔] Created crowdsec/profiles.yaml with Captcha + Ban remediation profiles.$(CLR_RESET)"; \
+	fi; \
+	if [ ! -f ./crowdsec/captcha.html ]; then \
+		echo -e "$(CLR_YELLOW)[*] Downloading official CrowdSec Captcha HTML template...$(CLR_RESET)"; \
+		curl -fsSL https://raw.githubusercontent.com/maxlerebourg/crowdsec-bouncer-traefik-plugin/main/captcha.html -o ./crowdsec/captcha.html; \
+		echo -e "$(CLR_GREEN)[✔] Downloaded crowdsec/captcha.html.$(CLR_RESET)"; \
+	fi; \
+	if [ ! -f ./crowdsec/ban.html ]; then \
+		echo -e "$(CLR_YELLOW)[*] Downloading official CrowdSec Ban HTML template...$(CLR_RESET)"; \
+		curl -fsSL https://raw.githubusercontent.com/maxlerebourg/crowdsec-bouncer-traefik-plugin/main/ban.html -o ./crowdsec/ban.html; \
+		echo -e "$(CLR_GREEN)[✔] Downloaded crowdsec/ban.html.$(CLR_RESET)"; \
+	fi; \
+	if grep -q '^CROWDSEC_ENABLED=' .env; then \
+		sed -i -E "s|^CROWDSEC_ENABLED=.*|CROWDSEC_ENABLED=true|" .env; \
+	else \
+		echo "CROWDSEC_ENABLED=true" >> .env; \
+	fi; \
+	curr_prof=$$(grep -E '^COMPOSE_PROFILES=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	new_prof=$$(echo "$$curr_prof,crowdsec" | tr ',' '\n' | grep -v '^$$' | awk '!seen[$$0]++' | paste -sd, -); \
+	if grep -q '^COMPOSE_PROFILES=' .env; then \
+		sed -i -E "s|^COMPOSE_PROFILES=.*|COMPOSE_PROFILES=$$new_prof|" .env; \
+	else \
+		echo "COMPOSE_PROFILES=$$new_prof" >> .env; \
+	fi; \
+	if grep -q '^CROWDSEC_BOUNCER_KEY=' .env; then \
+		sed -i -E "s|^CROWDSEC_BOUNCER_KEY=.*|CROWDSEC_BOUNCER_KEY=$$key_input|" .env; \
+	else \
+		echo "CROWDSEC_BOUNCER_KEY=$$key_input" >> .env; \
+	fi; \
+	echo -e "$(CLR_GREEN)[✔] CrowdSec configuration saved to .env.$(CLR_RESET)"; \
+	$(MAKE) --no-print-directory setup-captcha SKIP_RELOAD=1; \
+	$(MAKE) --no-print-directory reload-if-running; \
+	echo ""; \
+	echo -e "$(CLR_YELLOW)[*] Waiting 5 seconds for CrowdSec and Traefik to initialize...$(CLR_RESET)"; \
+	sleep 5; \
+	if command -v docker >/dev/null 2>&1; then \
+		if [ -n "$$(sudo docker compose ps -q crowdsec 2>/dev/null)" ] || [ -n "$$(sudo docker ps -q -f name=^/crowdsec$$ 2>/dev/null)" ]; then \
+			sudo docker exec crowdsec cscli bouncers delete TRAEFIK >/dev/null 2>&1 || true; \
+			sudo docker exec crowdsec cscli bouncers add TRAEFIK --key "$$key_input" >/dev/null 2>&1 || true; \
+		fi; \
+	fi; \
+	echo -e "$(CLR_CYAN)[*] Verifying Live Logs & Bouncer Connectivity:$(CLR_RESET)"; \
+	if command -v docker >/dev/null 2>&1; then \
+		if [ -n "$$(sudo docker compose ps -q crowdsec 2>/dev/null)" ] || [ -n "$$(sudo docker ps -q -f name=^/crowdsec$$ 2>/dev/null)" ]; then \
+			echo -e "$(CLR_YELLOW)--- CrowdSec Engine Recent Logs ---$(CLR_RESET)"; \
+			sudo docker compose logs --tail=15 crowdsec 2>/dev/null || true; \
+			echo -e "$(CLR_YELLOW)--- Traefik Bouncer Recent Logs ---$(CLR_RESET)"; \
+			sudo docker compose logs --tail=15 traefik 2>/dev/null || true; \
+			echo -e "$(CLR_YELLOW)--- Registered Bouncers Status ---$(CLR_RESET)"; \
+			sudo docker exec crowdsec cscli bouncers list 2>/dev/null || true; \
+		fi; \
+	fi
+
+enable-crowdsec: setup-crowdsec
+
+# 5b. CrowdSec Captcha Remediation Setup (Turnstile, hCaptcha, or Google reCAPTCHA v2)
+setup-captcha: init-env
+	@mkdir -p ./crowdsec; \
+	if [ ! -f ./crowdsec/captcha.html ]; then \
+		echo -e "$(CLR_YELLOW)[*] Downloading official CrowdSec Captcha HTML template...$(CLR_RESET)"; \
+		curl -fsSL https://raw.githubusercontent.com/maxlerebourg/crowdsec-bouncer-traefik-plugin/main/captcha.html -o ./crowdsec/captcha.html; \
+	fi; \
+	cap_prov=$$(grep -E '^CROWDSEC_CAPTCHA_PROVIDER=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	cap_site=$$(grep -E '^CROWDSEC_CAPTCHA_SITE_KEY=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	if [ -n "$$cap_prov" ] && [ -n "$$cap_site" ]; then \
+		echo -e "$(CLR_GREEN)[✔] CrowdSec Captcha already configured (Provider: $$cap_prov).$(CLR_RESET)"; \
+		read -p "Do you want to reconfigure Captcha remediation? [y/N]: " reconf_cap </dev/tty; \
+		if [ "$$reconf_cap" != "y" ] && [ "$$reconf_cap" != "Y" ]; then \
+			exit 0; \
+		fi; \
+	fi; \
+	echo -e "$(CLR_YELLOW)[*] CrowdSec Captcha Remediation Configuration:$(CLR_RESET)"; \
+	echo "Select Captcha provider for CrowdSec challenge pages:"; \
+	echo "  1) Cloudflare Turnstile (turnstile)"; \
+	echo "  2) hCaptcha (hcaptcha)"; \
+	echo "  3) Google reCAPTCHA v2 (recaptcha)"; \
+	echo "  4) Skip / Disable Captcha (use HTTP 403 Ban only)"; \
+	read -p "Choose [1-4, default 4 (Skip)]: " prov_choice </dev/tty; \
+	prov_choice=$${prov_choice:-4}; \
+	case "$$prov_choice" in \
+		1) selected_prov="turnstile" ;; \
+		2) selected_prov="hcaptcha" ;; \
+		3) selected_prov="recaptcha" ;; \
+		4) selected_prov="" ;; \
+		*) selected_prov="" ;; \
+	esac; \
+	if [ -n "$$selected_prov" ]; then \
+		read -p "Enter $$selected_prov Site Key (leave blank to skip Captcha): " site_key </dev/tty; \
+		read -p "Enter $$selected_prov Secret Key (leave blank to skip Captcha): " secret_key </dev/tty; \
+		if [ -z "$$site_key" ] || [ -z "$$secret_key" ]; then \
+			echo -e "$(CLR_YELLOW)[!] Site Key or Secret Key left blank. Falling back to Ban-only mode.$(CLR_RESET)"; \
+			selected_prov=""; \
+		fi; \
+	fi; \
+	if [ -z "$$selected_prov" ]; then \
+		for var in CROWDSEC_CAPTCHA_PROVIDER CROWDSEC_CAPTCHA_SITE_KEY CROWDSEC_CAPTCHA_SECRET_KEY; do \
+			if grep -q "^$$var=" .env; then \
+				sed -i -E "s|^$$var=.*|$$var=|" .env; \
+			else \
+				echo "$$var=" >> .env; \
+			fi; \
+		done; \
+		printf "name: default_ip_remediation\nfilters:\n  - Alert.Remediation == true && Alert.GetScope() == \"Ip\"\ndecisions:\n  - type: ban\n    duration: 4h\non_success: break\n" > ./crowdsec/profiles.yaml; \
+		echo -e "$(CLR_YELLOW)[✔] Captcha skipped/disabled (CrowdSec will enforce HTTP 403 Ban remediation).$(CLR_RESET)"; \
+	else \
+		read -p "Enter Captcha grace period in seconds [default 1800 (30m)]: " grace_sec </dev/tty; \
+		grace_sec=$${grace_sec:-1800}; \
+		echo "Select CrowdSec remediation profile mode:"; \
+		echo "  1) Mixed: Captcha for first 3 HTTP alerts in 24h, then Ban [recommended]"; \
+		echo "  2) Captcha-only for all HTTP scenario alerts"; \
+		read -p "Choose [1/2, default 1]: " prof_choice </dev/tty; \
+		if [ "$$prof_choice" = "2" ] && [ -f ./crowdsec/profiles_captcha_only.yaml ]; then \
+			cp ./crowdsec/profiles_captcha_only.yaml ./crowdsec/profiles.yaml; \
+			echo -e "$(CLR_GREEN)[✔] Activated Captcha-only HTTP profile in crowdsec/profiles.yaml.$(CLR_RESET)"; \
+		else \
+			printf "name: captcha_remediation\nfilters:\n  - Alert.Remediation == true && Alert.GetScope() == \"Ip\" && Alert.GetScenario() contains \"http\" && GetDecisionsSinceCount(Alert.GetValue(), \"24h\") <= 3\ndecisions:\n  - type: captcha\n    duration: 4h\non_success: break\n---\nname: default_ip_remediation\nfilters:\n  - Alert.Remediation == true && Alert.GetScope() == \"Ip\"\ndecisions:\n  - type: ban\n    duration: 4h\non_success: break\n" > ./crowdsec/profiles.yaml; \
+			echo -e "$(CLR_GREEN)[✔] Activated Mixed (Captcha + Ban) profile in crowdsec/profiles.yaml.$(CLR_RESET)"; \
+		fi; \
+		grep -q '^CROWDSEC_CAPTCHA_PROVIDER=' .env && sed -i -E "s|^CROWDSEC_CAPTCHA_PROVIDER=.*|CROWDSEC_CAPTCHA_PROVIDER=$$selected_prov|" .env || echo "CROWDSEC_CAPTCHA_PROVIDER=$$selected_prov" >> .env; \
+		grep -q '^CROWDSEC_CAPTCHA_SITE_KEY=' .env && sed -i -E "s|^CROWDSEC_CAPTCHA_SITE_KEY=.*|CROWDSEC_CAPTCHA_SITE_KEY=$$site_key|" .env || echo "CROWDSEC_CAPTCHA_SITE_KEY=$$site_key" >> .env; \
+		grep -q '^CROWDSEC_CAPTCHA_SECRET_KEY=' .env && sed -i -E "s|^CROWDSEC_CAPTCHA_SECRET_KEY=.*|CROWDSEC_CAPTCHA_SECRET_KEY=$$secret_key|" .env || echo "CROWDSEC_CAPTCHA_SECRET_KEY=$$secret_key" >> .env; \
+		grep -q '^CROWDSEC_CAPTCHA_GRACE_PERIOD=' .env && sed -i -E "s|^CROWDSEC_CAPTCHA_GRACE_PERIOD=.*|CROWDSEC_CAPTCHA_GRACE_PERIOD=$$grace_sec|" .env || echo "CROWDSEC_CAPTCHA_GRACE_PERIOD=$$grace_sec" >> .env; \
+		echo -e "$(CLR_GREEN)[✔] CrowdSec Captcha configured with provider '$$selected_prov' (grace period: $${grace_sec}s).$(CLR_RESET)"; \
+	fi
+	@if [ "$(SKIP_RELOAD)" != "1" ]; then \
+		$(MAKE) --no-print-directory reload-if-running; \
+	fi
+
+# Enable CrowdSec middleware globally for all endpoints on websecure entrypoint
+enable-crowdsec-all: init-env
+	@echo -e "$(CLR_YELLOW)[*] Enabling CrowdSec middleware globally for all websecure endpoints...$(CLR_RESET)"
+	@if grep -q '^[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"' docker-compose.yml; then \
+		echo -e "$(CLR_GREEN)[✔] Global CrowdSec entrypoint middleware is already active.$(CLR_RESET)"; \
+	else \
+		sed -i -E 's|^[[:space:]]*#[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|      - "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|' docker-compose.yml; \
+		echo -e "$(CLR_GREEN)[✔] Added global entrypoint middleware to docker-compose.yml.$(CLR_RESET)"; \
+	fi
+	@if [ "$$(grep -E '^CROWDSEC_ENABLED=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]')" != "true" ]; then \
+		echo -e "$(CLR_YELLOW)[*] CrowdSec core is currently disabled. Starting CrowdSec setup...$(CLR_RESET)"; \
+		$(MAKE) --no-print-directory setup-crowdsec; \
+	else \
+		$(MAKE) --no-print-directory reload-if-running; \
+	fi
+	@echo -e "$(CLR_GREEN)[✔] All endpoints and routers on websecure are now automatically protected by CrowdSec.$(CLR_RESET)"
+
+enable-crowdsec-global: enable-crowdsec-all
+
+# Disable global CrowdSec middleware on entrypoint (revert to per-service)
+disable-crowdsec-all: init-env
+	@echo -e "$(CLR_YELLOW)[*] Disabling global entrypoint middleware in docker-compose.yml...$(CLR_RESET)"
+	@if grep -q '^[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"' docker-compose.yml; then \
+		sed -i -E 's|^[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|      # - "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|' docker-compose.yml; \
+		echo -e "$(CLR_GREEN)[✔] Global entrypoint middleware commented out.$(CLR_RESET)"; \
+		$(MAKE) --no-print-directory reload-if-running; \
+		echo -e "$(CLR_GREEN)[✔] Reverted to per-service protection (services can still use router labels).$(CLR_RESET)"; \
+	else \
+		echo -e "$(CLR_GREEN)[✔] Global entrypoint middleware is already disabled.$(CLR_RESET)"; \
+	fi
+
+disable-crowdsec-global: disable-crowdsec-all
+
+# Tail live logs from CrowdSec container
+logs-crowdsec:
+	@if command -v docker >/dev/null 2>&1; then \
+		sudo docker compose logs -f crowdsec; \
+	else \
+		echo -e "$(CLR_RED)[!] Docker command not found.$(CLR_RESET)"; \
+	fi
+
+# Detailed CrowdSec Security Report
+crowdsec-report: init-env
+	@echo ""
+	@echo -e "$(CLR_CYAN)╔══════════════════════════════════════════════════════════════════════════════╗$(CLR_RESET)"
+	@echo -e "$(CLR_CYAN)║$(CLR_RESET)                   $(CLR_BOLD)$(CLR_WHITE)CROWDSEC DETAILED SECURITY REPORT$(CLR_RESET)                         $(CLR_CYAN)║$(CLR_RESET)"
+	@echo -e "$(CLR_CYAN)╚══════════════════════════════════════════════════════════════════════════════╝$(CLR_RESET)"
+	@if ! command -v docker >/dev/null 2>&1; then \
+		echo -e "$(CLR_RED)[!] Docker is not installed or running.$(CLR_RESET)"; \
+		exit 1; \
+	fi
+	@CS_ID=$$(sudo docker compose ps -q crowdsec 2>/dev/null || sudo docker ps -q -f name=^/crowdsec$$ 2>/dev/null); \
+	if [ -z "$$CS_ID" ]; then \
+		echo -e "$(CLR_RED)[!] CrowdSec container is not currently running.$(CLR_RESET)"; \
+		echo -e "    Run $(CLR_GREEN)make setup-crowdsec$(CLR_RESET) to configure and start CrowdSec."; \
+		exit 0; \
+	fi
+	@echo -e "$(CLR_YELLOW)[1] Registered Bouncers:$(CLR_RESET)"
+	@sudo docker exec crowdsec cscli bouncers list 2>/dev/null || echo "Unable to query bouncers"
+	@echo ""
+	@echo -e "$(CLR_YELLOW)[2] Active Decisions (Bans & Captchas):$(CLR_RESET)"
+	@sudo docker exec crowdsec cscli decisions list 2>/dev/null || echo "Unable to query decisions"
+	@echo ""
+	@echo -e "$(CLR_YELLOW)[3] Log Acquisition & Metrics Summary:$(CLR_RESET)"
+	@sudo docker exec crowdsec cscli metrics 2>/dev/null || echo "Unable to query metrics"
+	@echo ""
+
+cs-report: crowdsec-report
+
+# List active CrowdSec IP bans and decisions
+crowdsec-bans: init-env
+	@if ! command -v docker >/dev/null 2>&1; then \
+		echo -e "$(CLR_RED)[!] Docker is not installed or running.$(CLR_RESET)"; \
+		exit 1; \
+	fi
+	@CS_ID=$$(sudo docker compose ps -q crowdsec 2>/dev/null || sudo docker ps -q -f name=^/crowdsec$$ 2>/dev/null); \
+	if [ -z "$$CS_ID" ]; then \
+		echo -e "$(CLR_RED)[!] CrowdSec container is not currently running.$(CLR_RESET)"; \
+		exit 1; \
+	fi
+	@echo -e "$(CLR_CYAN)[*] Active CrowdSec IP Bans & Captcha Decisions:$(CLR_RESET)"
+	@sudo docker exec crowdsec cscli decisions list
+
+bans: crowdsec-bans
+cs-bans: crowdsec-bans
+crowdsec-decisions: crowdsec-bans
+
+# Trigger a test Captcha decision for an IP (Usage: make captcha-test IP=1.2.3.4 or interactive)
+crowdsec-captcha-test: init-env
+	@if ! command -v docker >/dev/null 2>&1; then \
+		echo -e "$(CLR_RED)[!] Docker is not installed or running.$(CLR_RESET)"; \
+		exit 1; \
+	fi
+	@CS_ID=$$(sudo docker compose ps -q crowdsec 2>/dev/null || sudo docker ps -q -f name=^/crowdsec$$ 2>/dev/null); \
+	if [ -z "$$CS_ID" ]; then \
+		echo -e "$(CLR_RED)[!] CrowdSec container is not currently running.$(CLR_RESET)"; \
+		exit 1; \
+	fi
+	@target_ip="$(IP)"; \
+	if [ -z "$$target_ip" ]; then \
+		read -p "Enter IP address to challenge with Captcha (4h): " target_ip </dev/tty; \
+	fi; \
+	if [ -z "$$target_ip" ]; then \
+		echo -e "$(CLR_RED)[!] No IP address specified.$(CLR_RESET)"; \
+		exit 1; \
+	fi; \
+	echo -e "$(CLR_YELLOW)[*] Adding 4h Captcha decision for IP $$target_ip...$(CLR_RESET)"; \
+	if sudo docker exec crowdsec cscli decisions add --ip "$$target_ip" -d 4h --type captcha; then \
+		echo -e "$(CLR_GREEN)[✔] Captcha decision added for $$target_ip (note: if $$target_ip is in clientTrustedIPs, remove it from clientTrustedIPs to test).$(CLR_RESET)"; \
+	else \
+		echo -e "$(CLR_RED)[!] Failed to add Captcha decision for IP $$target_ip.$(CLR_RESET)"; \
+	fi
+
+captcha-test: crowdsec-captcha-test
+
+# Unban / remove decisions for an IP address (Usage: make crowdsec-unban IP=1.2.3.4 or interactive)
+crowdsec-unban: init-env
+	@if ! command -v docker >/dev/null 2>&1; then \
+		echo -e "$(CLR_RED)[!] Docker is not installed or running.$(CLR_RESET)"; \
+		exit 1; \
+	fi
+	@CS_ID=$$(sudo docker compose ps -q crowdsec 2>/dev/null || sudo docker ps -q -f name=^/crowdsec$$ 2>/dev/null); \
+	if [ -z "$$CS_ID" ]; then \
+		echo -e "$(CLR_RED)[!] CrowdSec container is not currently running.$(CLR_RESET)"; \
+		exit 1; \
+	fi
+	@target_ip="$(IP)"; \
+	if [ -z "$$target_ip" ]; then \
+		read -p "Enter IP address to unban / clear decisions: " target_ip </dev/tty; \
+	fi; \
+	if [ -z "$$target_ip" ]; then \
+		echo -e "$(CLR_RED)[!] No IP address specified.$(CLR_RESET)"; \
+		exit 1; \
+	fi; \
+	echo -e "$(CLR_YELLOW)[*] Removing active ban/captcha decisions for IP $$target_ip...$(CLR_RESET)"; \
+	if sudo docker exec crowdsec cscli decisions delete --ip "$$target_ip"; then \
+		echo -e "$(CLR_GREEN)[✔] Decisions for IP $$target_ip successfully removed.$(CLR_RESET)"; \
+	else \
+		echo -e "$(CLR_RED)[!] Failed to remove decisions for IP $$target_ip.$(CLR_RESET)"; \
+	fi
+
+unban: crowdsec-unban
+
+# Disable CrowdSec and stop container
+disable-crowdsec: init-env
+	@echo -e "$(CLR_YELLOW)[*] Disabling CrowdSec Intrusion Prevention...$(CLR_RESET)"
+	@if grep -q '^CROWDSEC_ENABLED=' .env; then \
+		sed -i -E "s|^CROWDSEC_ENABLED=.*|CROWDSEC_ENABLED=false|" .env; \
+	else \
+		echo "CROWDSEC_ENABLED=false" >> .env; \
+	fi
+	@curr_prof=$$(grep -E '^COMPOSE_PROFILES=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	new_prof=$$(echo "$$curr_prof" | tr ',' '\n' | grep -v '^$$' | grep -v '^crowdsec$$' | awk '!seen[$$0]++' | paste -sd, -); \
+	if grep -q '^COMPOSE_PROFILES=' .env; then \
+		sed -i -E "s|^COMPOSE_PROFILES=.*|COMPOSE_PROFILES=$$new_prof|" .env; \
+	else \
+		echo "COMPOSE_PROFILES=$$new_prof" >> .env; \
+	fi
+	@if grep -q '^[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"' docker-compose.yml; then \
+		sed -i -E 's|^[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|      # - "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"|' docker-compose.yml; \
+	fi
+	@if command -v docker >/dev/null 2>&1; then \
+		if [ -n "$$(sudo docker compose ps -q crowdsec 2>/dev/null)" ] || [ -n "$$(sudo docker ps -q -f name=^/crowdsec$$ 2>/dev/null)" ]; then \
+			echo -e "$(CLR_YELLOW)[*] Stopping and removing CrowdSec container...$(CLR_RESET)"; \
+			sudo docker compose stop crowdsec 2>/dev/null || true; \
+			sudo docker compose rm -f crowdsec 2>/dev/null || true; \
+		fi; \
+	fi
+	@echo -e "$(CLR_GREEN)[✔] CrowdSec disabled successfully.$(CLR_RESET)"
+	@$(MAKE) --no-print-directory reload-if-running
+
+# 6. Optional OpenTelemetry Distributed Tracing (Traefik v3.7 OTLP + Jaeger UI)
+setup-tracing: init-env
+	@tr_enabled=$$(grep -E '^TRACING_ENABLED=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	tr_ep=$$(grep -E '^TRAEFIK_TRACING_OTLP_HTTP_ENDPOINT=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	if [ "$$tr_enabled" = "true" ]; then \
+		echo -e "$(CLR_GREEN)[✔] OpenTelemetry Tracing already enabled (Endpoint: $${tr_ep:-http://jaeger:4318/v1/traces}).$(CLR_RESET)"; \
+		read -p "Do you want to reconfigure OpenTelemetry Tracing? [y/N]: " reconf_tr </dev/tty; \
+		if [ "$$reconf_tr" != "y" ] && [ "$$reconf_tr" != "Y" ]; then \
+			exit 0; \
+		fi; \
+	fi; \
+	echo -e "$(CLR_YELLOW)[*] Optional OpenTelemetry Distributed Tracing (Traefik v3.7 OTLP):$(CLR_RESET)"; \
+	if [ "$(FORCE_TRACING)" = "1" ]; then \
+		read -p "Enable OpenTelemetry Tracing for Traefik? [Y/n, default Y]: " enable_tr </dev/tty; \
+		enable_tr=$${enable_tr:-Y}; \
+	else \
+		read -p "Enable OpenTelemetry Tracing for Traefik? [y/N, default N]: " enable_tr </dev/tty; \
+		enable_tr=$${enable_tr:-N}; \
+	fi; \
+	if [ "$$enable_tr" != "y" ] && [ "$$enable_tr" != "Y" ]; then \
+		$(MAKE) --no-print-directory disable-tracing; \
+		exit 0; \
+	fi; \
+	echo "Select OTLP Trace Collector backend:"; \
+	echo "  1) Built-in Jaeger All-in-One container (http://jaeger:4318/v1/traces + Jaeger UI on port 16686) [recommended]"; \
+	echo "  2) External OTLP HTTP Collector (Grafana Tempo, SigNoz, OpenTelemetry Collector, etc.)"; \
+	read -p "Choose [1/2, default 1]: " tr_backend </dev/tty; \
+	tr_backend=$${tr_backend:-1}; \
+	if [ "$$tr_backend" = "2" ]; then \
+		read -p "Enter OTLP HTTP endpoint URL [http://localhost:4318/v1/traces]: " otlp_ep </dev/tty; \
+		otlp_ep=$${otlp_ep:-http://localhost:4318/v1/traces}; \
+		use_jaeger="false"; \
+	else \
+		otlp_ep="http://jaeger:4318/v1/traces"; \
+		use_jaeger="true"; \
+	fi; \
+	read -p "Enter Traefik tracing service name [default traefik]: " tr_svc </dev/tty; \
+	tr_svc=$${tr_svc:-traefik}; \
+	read -p "Enter trace sampling rate (0.0 to 1.0, e.g. 1.0 = 100%, 0.1 = 10%) [default 1.0]: " tr_rate </dev/tty; \
+	tr_rate=$${tr_rate:-1.0}; \
+	read -p "Trace internal Traefik routers/services (addInternals)? [y/N, default N]: " tr_int </dev/tty; \
+	if [ "$$tr_int" = "y" ] || [ "$$tr_int" = "Y" ]; then \
+		tr_internals="true"; \
+	else \
+		tr_internals="false"; \
+	fi; \
+	grep -q '^TRACING_ENABLED=' .env && sed -i -E "s|^TRACING_ENABLED=.*|TRACING_ENABLED=true|" .env || echo "TRACING_ENABLED=true" >> .env; \
+	grep -q '^TRAEFIK_TRACING_SERVICE_NAME=' .env && sed -i -E "s|^TRAEFIK_TRACING_SERVICE_NAME=.*|TRAEFIK_TRACING_SERVICE_NAME=$$tr_svc|" .env || echo "TRAEFIK_TRACING_SERVICE_NAME=$$tr_svc" >> .env; \
+	grep -q '^TRAEFIK_TRACING_SAMPLE_RATE=' .env && sed -i -E "s|^TRAEFIK_TRACING_SAMPLE_RATE=.*|TRAEFIK_TRACING_SAMPLE_RATE=$$tr_rate|" .env || echo "TRAEFIK_TRACING_SAMPLE_RATE=$$tr_rate" >> .env; \
+	grep -q '^TRAEFIK_TRACING_ADD_INTERNALS=' .env && sed -i -E "s|^TRAEFIK_TRACING_ADD_INTERNALS=.*|TRAEFIK_TRACING_ADD_INTERNALS=$$tr_internals|" .env || echo "TRAEFIK_TRACING_ADD_INTERNALS=$$tr_internals" >> .env; \
+	grep -q '^TRAEFIK_TRACING_OTLP_HTTP_ENDPOINT=' .env && sed -i -E "s|^TRAEFIK_TRACING_OTLP_HTTP_ENDPOINT=.*|TRAEFIK_TRACING_OTLP_HTTP_ENDPOINT=$$otlp_ep|" .env || echo "TRAEFIK_TRACING_OTLP_HTTP_ENDPOINT=$$otlp_ep" >> .env; \
+	curr_prof=$$(grep -E '^COMPOSE_PROFILES=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	if [ "$$use_jaeger" = "true" ]; then \
+		new_prof=$$(echo "$$curr_prof,tracing" | tr ',' '\n' | grep -v '^$$' | awk '!seen[$$0]++' | paste -sd, -); \
+	else \
+		new_prof=$$(echo "$$curr_prof" | tr ',' '\n' | grep -v '^$$' | grep -v '^tracing$$' | awk '!seen[$$0]++' | paste -sd, -); \
+	fi; \
+	if grep -q '^COMPOSE_PROFILES=' .env; then \
+		sed -i -E "s|^COMPOSE_PROFILES=.*|COMPOSE_PROFILES=$$new_prof|" .env; \
+	else \
+		echo "COMPOSE_PROFILES=$$new_prof" >> .env; \
+	fi; \
+	sed -i -E 's|^[[:space:]]*#[[:space:]]*- "--tracing\.|      - "--tracing.|' docker-compose.yml; \
+	echo -e "$(CLR_GREEN)[✔] OpenTelemetry Tracing enabled (Endpoint: $$otlp_ep, Sample Rate: $$tr_rate).$(CLR_RESET)"; \
+	if [ "$$use_jaeger" = "true" ]; then \
+		echo -e "$(CLR_CYAN)[i] Jaeger UI will be available on http://127.0.0.1:16686 (use SSH tunnel: ssh -L 16686:127.0.0.1:16686 user@server).$(CLR_RESET)"; \
+	fi
+	@$(MAKE) --no-print-directory reload-if-running
+
+enable-tracing:
+	@$(MAKE) --no-print-directory setup-tracing FORCE_TRACING=1
+
+disable-tracing: init-env
+	@echo -e "$(CLR_YELLOW)[*] Disabling OpenTelemetry Distributed Tracing...$(CLR_RESET)"
+	@if grep -q '^TRACING_ENABLED=' .env; then \
+		sed -i -E "s|^TRACING_ENABLED=.*|TRACING_ENABLED=false|" .env; \
+	else \
+		echo "TRACING_ENABLED=false" >> .env; \
+	fi
+	@curr_prof=$$(grep -E '^COMPOSE_PROFILES=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	new_prof=$$(echo "$$curr_prof" | tr ',' '\n' | grep -v '^$$' | grep -v '^tracing$$' | awk '!seen[$$0]++' | paste -sd, -); \
+	if grep -q '^COMPOSE_PROFILES=' .env; then \
+		sed -i -E "s|^COMPOSE_PROFILES=.*|COMPOSE_PROFILES=$$new_prof|" .env; \
+	else \
+		echo "COMPOSE_PROFILES=$$new_prof" >> .env; \
+	fi
+	@sed -i -E 's|^[[:space:]]*- "--tracing\.|      # - "--tracing.|' docker-compose.yml
+	@if command -v docker >/dev/null 2>&1; then \
+		if [ -n "$$(sudo docker compose ps -q jaeger 2>/dev/null)" ] || [ -n "$$(sudo docker ps -q -f name=^/jaeger$$ 2>/dev/null)" ]; then \
+			echo -e "$(CLR_YELLOW)[*] Stopping and removing Jaeger container...$(CLR_RESET)"; \
+			sudo docker compose stop jaeger 2>/dev/null || true; \
+			sudo docker compose rm -f jaeger 2>/dev/null || true; \
+		fi; \
+	fi
+	@echo -e "$(CLR_GREEN)[✔] OpenTelemetry Tracing disabled.$(CLR_RESET)"
+	@$(MAKE) --no-print-directory reload-if-running
+
+# 7. Optional Prometheus Metrics Collection (Traefik v3.7 + Built-in Prometheus Server)
+setup-metrics: init-env
+	@mt_enabled=$$(grep -E '^METRICS_ENABLED=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	if [ "$$mt_enabled" = "true" ]; then \
+		echo -e "$(CLR_GREEN)[✔] Prometheus Metrics already enabled.$(CLR_RESET)"; \
+		read -p "Do you want to reconfigure Prometheus Metrics? [y/N]: " reconf_mt </dev/tty; \
+		if [ "$$reconf_mt" != "y" ] && [ "$$reconf_mt" != "Y" ]; then \
+			exit 0; \
+		fi; \
+	fi; \
+	echo -e "$(CLR_YELLOW)[*] Optional Prometheus Metrics Collection (Traefik v3.7):$(CLR_RESET)"; \
+	if [ "$(FORCE_METRICS)" = "1" ]; then \
+		read -p "Enable Prometheus Metrics for Traefik? [Y/n, default Y]: " enable_mt </dev/tty; \
+		enable_mt=$${enable_mt:-Y}; \
+	else \
+		read -p "Enable Prometheus Metrics for Traefik? [y/N, default N]: " enable_mt </dev/tty; \
+		enable_mt=$${enable_mt:-N}; \
+	fi; \
+	if [ "$$enable_mt" != "y" ] && [ "$$enable_mt" != "Y" ]; then \
+		$(MAKE) --no-print-directory disable-metrics; \
+		exit 0; \
+	fi; \
+	echo "Select Prometheus deployment mode:"; \
+	echo "  1) Built-in Prometheus container (scrapes traefik:8082 + crowdsec:6060, UI on port 9090) [recommended]"; \
+	echo "  2) Expose /metrics endpoint only on Docker network (http://traefik:8082/metrics for external Prometheus)"; \
+	read -p "Choose [1/2, default 1]: " mt_backend </dev/tty; \
+	mt_backend=$${mt_backend:-1}; \
+	if [ "$$mt_backend" = "2" ]; then \
+		use_prom="false"; \
+	else \
+		use_prom="true"; \
+		read -p "Enter Prometheus data retention period [default 15d]: " prom_ret </dev/tty; \
+		prom_ret=$${prom_ret:-15d}; \
+		grep -q '^PROMETHEUS_RETENTION=' .env && sed -i -E "s|^PROMETHEUS_RETENTION=.*|PROMETHEUS_RETENTION=$$prom_ret|" .env || echo "PROMETHEUS_RETENTION=$$prom_ret" >> .env; \
+	fi; \
+	read -p "Include per-router metrics labels (addRoutersLabels)? [Y/n, default Y]: " mt_routers </dev/tty; \
+	if [ "$$mt_routers" = "n" ] || [ "$$mt_routers" = "N" ]; then \
+		mt_routers_val="false"; \
+	else \
+		mt_routers_val="true"; \
+	fi; \
+	read -p "Include per-service metrics labels (addServicesLabels)? [Y/n, default Y]: " mt_services </dev/tty; \
+	if [ "$$mt_services" = "n" ] || [ "$$mt_services" = "N" ]; then \
+		mt_services_val="false"; \
+	else \
+		mt_services_val="true"; \
+	fi; \
+	read -p "Include internal Traefik resources (addInternals)? [y/N, default N]: " mt_int </dev/tty; \
+	if [ "$$mt_int" = "y" ] || [ "$$mt_int" = "Y" ]; then \
+		mt_int_val="true"; \
+	else \
+		mt_int_val="false"; \
+	fi; \
+	read -p "Enter latency histogram buckets in seconds [default 0.1,0.3,1.2,5.0]: " mt_buckets </dev/tty; \
+	mt_buckets=$${mt_buckets:-0.1,0.3,1.2,5.0}; \
+	mkdir -p ./prometheus; \
+	if [ ! -f ./prometheus/prometheus.yml ]; then \
+		printf 'global:\n  scrape_interval: 15s\n  evaluation_interval: 15s\n\nscrape_configs:\n  - job_name: "traefik"\n    static_configs:\n      - targets: ["traefik:8082"]\n\n  - job_name: "crowdsec"\n    static_configs:\n      - targets: ["crowdsec:6060"]\n' > ./prometheus/prometheus.yml; \
+		echo -e "$(CLR_GREEN)[✔] Created prometheus/prometheus.yml.$(CLR_RESET)"; \
+	fi; \
+	grep -q '^METRICS_ENABLED=' .env && sed -i -E "s|^METRICS_ENABLED=.*|METRICS_ENABLED=true|" .env || echo "METRICS_ENABLED=true" >> .env; \
+	grep -q '^TRAEFIK_METRICS_ADD_ROUTERS_LABELS=' .env && sed -i -E "s|^TRAEFIK_METRICS_ADD_ROUTERS_LABELS=.*|TRAEFIK_METRICS_ADD_ROUTERS_LABELS=$$mt_routers_val|" .env || echo "TRAEFIK_METRICS_ADD_ROUTERS_LABELS=$$mt_routers_val" >> .env; \
+	grep -q '^TRAEFIK_METRICS_ADD_SERVICES_LABELS=' .env && sed -i -E "s|^TRAEFIK_METRICS_ADD_SERVICES_LABELS=.*|TRAEFIK_METRICS_ADD_SERVICES_LABELS=$$mt_services_val|" .env || echo "TRAEFIK_METRICS_ADD_SERVICES_LABELS=$$mt_services_val" >> .env; \
+	grep -q '^TRAEFIK_METRICS_ADD_INTERNALS=' .env && sed -i -E "s|^TRAEFIK_METRICS_ADD_INTERNALS=.*|TRAEFIK_METRICS_ADD_INTERNALS=$$mt_int_val|" .env || echo "TRAEFIK_METRICS_ADD_INTERNALS=$$mt_int_val" >> .env; \
+	grep -q '^TRAEFIK_METRICS_BUCKETS=' .env && sed -i -E "s|^TRAEFIK_METRICS_BUCKETS=.*|TRAEFIK_METRICS_BUCKETS=$$mt_buckets|" .env || echo "TRAEFIK_METRICS_BUCKETS=$$mt_buckets" >> .env; \
+	curr_prof=$$(grep -E '^COMPOSE_PROFILES=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	if [ "$$use_prom" = "true" ]; then \
+		new_prof=$$(echo "$$curr_prof,metrics" | tr ',' '\n' | grep -v '^$$' | awk '!seen[$$0]++' | paste -sd, -); \
+	else \
+		new_prof=$$(echo "$$curr_prof" | tr ',' '\n' | grep -v '^$$' | grep -v '^metrics$$' | awk '!seen[$$0]++' | paste -sd, -); \
+	fi; \
+	if grep -q '^COMPOSE_PROFILES=' .env; then \
+		sed -i -E "s|^COMPOSE_PROFILES=.*|COMPOSE_PROFILES=$$new_prof|" .env; \
+	else \
+		echo "COMPOSE_PROFILES=$$new_prof" >> .env; \
+	fi; \
+	sed -i -E 's|^[[:space:]]*#[[:space:]]*- "--entrypoints\.metrics\.|      - "--entrypoints.metrics.|' docker-compose.yml; \
+	sed -i -E 's|^[[:space:]]*#[[:space:]]*- "--metrics\.|      - "--metrics.|' docker-compose.yml; \
+	echo -e "$(CLR_GREEN)[✔] Prometheus Metrics enabled (Routers: $$mt_routers_val, Services: $$mt_services_val, Buckets: $$mt_buckets).$(CLR_RESET)"; \
+	if [ "$$use_prom" = "true" ]; then \
+		echo -e "$(CLR_CYAN)[i] Prometheus UI will be available on http://127.0.0.1:9090 (use SSH tunnel: ssh -L 9090:127.0.0.1:9090 user@server).$(CLR_RESET)"; \
+	else \
+		echo -e "$(CLR_CYAN)[i] Scrape endpoint available inside Docker network at http://traefik:8082/metrics.$(CLR_RESET)"; \
+	fi
+	@$(MAKE) --no-print-directory reload-if-running
+
+enable-metrics:
+	@$(MAKE) --no-print-directory setup-metrics FORCE_METRICS=1
+
+disable-metrics: init-env
+	@echo -e "$(CLR_YELLOW)[*] Disabling Prometheus Metrics Collection...$(CLR_RESET)"
+	@if grep -q '^METRICS_ENABLED=' .env; then \
+		sed -i -E "s|^METRICS_ENABLED=.*|METRICS_ENABLED=false|" .env; \
+	else \
+		echo "METRICS_ENABLED=false" >> .env; \
+	fi
+	@curr_prof=$$(grep -E '^COMPOSE_PROFILES=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	new_prof=$$(echo "$$curr_prof" | tr ',' '\n' | grep -v '^$$' | grep -v '^metrics$$' | awk '!seen[$$0]++' | paste -sd, -); \
+	if grep -q '^COMPOSE_PROFILES=' .env; then \
+		sed -i -E "s|^COMPOSE_PROFILES=.*|COMPOSE_PROFILES=$$new_prof|" .env; \
+	else \
+		echo "COMPOSE_PROFILES=$$new_prof" >> .env; \
+	fi
+	@sed -i -E 's|^[[:space:]]*- "--entrypoints\.metrics\.|      # - "--entrypoints.metrics.|' docker-compose.yml
+	@sed -i -E 's|^[[:space:]]*- "--metrics\.|      # - "--metrics.|' docker-compose.yml
+	@if command -v docker >/dev/null 2>&1; then \
+		if [ -n "$$(sudo docker compose ps -q prometheus 2>/dev/null)" ] || [ -n "$$(sudo docker ps -q -f name=^/prometheus$$ 2>/dev/null)" ]; then \
+			echo -e "$(CLR_YELLOW)[*] Stopping and removing Prometheus container...$(CLR_RESET)"; \
+			sudo docker compose stop prometheus 2>/dev/null || true; \
+			sudo docker compose rm -f prometheus 2>/dev/null || true; \
+		fi; \
+	fi
+	@echo -e "$(CLR_GREEN)[✔] Prometheus Metrics disabled.$(CLR_RESET)"
+	@$(MAKE) --no-print-directory reload-if-running
+
 # Color formatted status report box
 report: init-env
-	@AUTH_SET=$$(grep -E '^TRAEFIK_BASIC_AUTH_USERS=' .env | cut -d '=' -f2- | tr -d '[:space:]'); \
-	ACME_SET=$$(grep -E '^ACME_EMAIL=' .env | cut -d '=' -f2- | tr -d '[:space:]'); \
-	CF_SET=$$(grep -E '^CF_DNS_API_TOKEN=' .env | cut -d '=' -f2- | tr -d '[:space:]'); \
-	DOM_SET=$$(grep -E '^TRAEFIK_DASHBOARD_DOMAIN=' .env | cut -d '=' -f2- | tr -d '[:space:]'); \
-	RES_SET=$$(grep -E '^TRAEFIK_DASHBOARD_CERTRESOLVER=' .env | cut -d '=' -f2- | tr -d '[:space:]'); \
+	@AUTH_SET=$$(grep -E '^TRAEFIK_BASIC_AUTH_USERS=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	ACME_SET=$$(grep -E '^ACME_EMAIL=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	CF_SET=$$(grep -E '^CF_DNS_API_TOKEN=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	DOM_SET=$$(grep -E '^TRAEFIK_DASHBOARD_DOMAIN=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	RES_SET=$$(grep -E '^TRAEFIK_DASHBOARD_CERTRESOLVER=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	CS_ENABLED=$$(grep -E '^CROWDSEC_ENABLED=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	CS_KEY=$$(grep -E '^CROWDSEC_BOUNCER_KEY=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	CAP_PROV=$$(grep -E '^CROWDSEC_CAPTCHA_PROVIDER=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	CAP_SITE=$$(grep -E '^CROWDSEC_CAPTCHA_SITE_KEY=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	MT_ENABLED=$$(grep -E '^METRICS_ENABLED=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	TR_ENABLED=$$(grep -E '^TRACING_ENABLED=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
+	TR_RATE=$$(grep -E '^TRAEFIK_TRACING_SAMPLE_RATE=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '[:space:]'); \
 	PORT_CHECK="Open (80, 443)"; \
 	sudo iptables -C INPUT -p tcp -m multiport --dports 80,443 -j ACCEPT 2>/dev/null || PORT_CHECK="Needs Attention"; \
 	PERM_CHECK="Not Set"; \
@@ -195,6 +790,32 @@ report: init-env
 	[ -z "$$CF_SET" ] || [ "$$CF_SET" = "your_cloudflare_api_token_here" ] && CF_STATUS="Disabled (Skipped)" || CF_STATUS="Configured"; \
 	[ -z "$$DOM_SET" ] || [ "$$DOM_SET" = "traefik.example.com" ] && DOM_STATUS="Default (traefik.example.com)" || DOM_STATUS="$$DOM_SET"; \
 	[ "$$RES_SET" = "cloudflare_resolver" ] && RES_STATUS="Cloudflare DNS-01" || RES_STATUS="Let's Encrypt HTTP-01"; \
+	[ "$$CS_ENABLED" = "true" ] && [ -n "$$CS_KEY" ] && CS_STATUS="Enabled" || CS_STATUS="Disabled"; \
+	[ -n "$$CAP_PROV" ] && [ -n "$$CAP_SITE" ] && CAP_STATUS="Enabled ($$CAP_PROV)" || CAP_STATUS="Disabled (Ban only)"; \
+	CS_SCOPE="Per-Service"; \
+	grep -q '^[[:space:]]*- "--entrypoints.websecure.http.middlewares=crowdsec-bouncer@docker"' docker-compose.yml 2>/dev/null && CS_SCOPE="All Endpoints (Global)"; \
+	CS_RUNNING="Stopped"; \
+	command -v docker >/dev/null 2>&1 && [ -n "$$(sudo docker compose ps -q crowdsec 2>/dev/null || sudo docker ps -q -f name=^/crowdsec$$ 2>/dev/null)" ] && CS_RUNNING="Running"; \
+	if [ "$$MT_ENABLED" = "true" ]; then \
+		PROM_RUNNING="Endpoint :8082 only"; \
+		if grep -E '^COMPOSE_PROFILES=' .env 2>/dev/null | grep -q 'metrics'; then \
+			PROM_RUNNING="Prometheus Stopped"; \
+			command -v docker >/dev/null 2>&1 && [ -n "$$(sudo docker compose ps -q prometheus 2>/dev/null || sudo docker ps -q -f name=^/prometheus$$ 2>/dev/null)" ] && PROM_RUNNING="Prometheus Running"; \
+		fi; \
+		MT_STATUS="Enabled ($$PROM_RUNNING)"; \
+	else \
+		MT_STATUS="Disabled"; \
+	fi; \
+	if [ "$$TR_ENABLED" = "true" ]; then \
+		JAEGER_RUNNING="External OTLP"; \
+		if grep -E '^COMPOSE_PROFILES=' .env 2>/dev/null | grep -q 'tracing'; then \
+			JAEGER_RUNNING="Jaeger Stopped"; \
+			command -v docker >/dev/null 2>&1 && [ -n "$$(sudo docker compose ps -q jaeger 2>/dev/null || sudo docker ps -q -f name=^/jaeger$$ 2>/dev/null)" ] && JAEGER_RUNNING="Jaeger Running"; \
+		fi; \
+		TR_STATUS="Enabled (rate: $${TR_RATE:-1.0}, $$JAEGER_RUNNING)"; \
+	else \
+		TR_STATUS="Disabled"; \
+	fi; \
 	echo ""; \
 	echo -e "$(CLR_CYAN)╔══════════════════════════════════════════════════════════════════════════════╗$(CLR_RESET)"; \
 	echo -e "$(CLR_CYAN)║$(CLR_RESET)                   $(CLR_BOLD)$(CLR_WHITE)TRAEFIK CONFIGURATION & STATUS REPORT$(CLR_RESET)                      $(CLR_CYAN)║$(CLR_RESET)"; \
@@ -204,8 +825,13 @@ report: init-env
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "Basic Auth Status" "$$AUTH_STATUS"; \
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "ACME Notification Email" "$$ACME_STATUS"; \
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "Cloudflare DNS Token" "$$CF_STATUS"; \
+	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "CrowdSec IPS (Bouncer)" "$$CS_STATUS ($$CS_RUNNING)"; \
+	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "CrowdSec Captcha" "$$CAP_STATUS"; \
+	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "CrowdSec Scope" "$$CS_SCOPE"; \
+	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "Prometheus Metrics" "$$MT_STATUS"; \
+	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "OpenTelemetry Tracing" "$$TR_STATUS"; \
 	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)%-45s$(CLR_RESET)$(CLR_CYAN)║$(CLR_RESET)\n" "Firewall Ports" "$$PORT_CHECK"; \
-	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)acme.json (perms: %-27s)$(CLR_CYAN)║$(CLR_RESET)\n" "$$PERM_CHECK"; \
+	printf "$(CLR_CYAN)║$(CLR_RESET)  $(CLR_YELLOW)%-25s$(CLR_RESET) : $(CLR_WHITE)acme.json (perms: %-27s)$(CLR_CYAN)║$(CLR_RESET)\n" "ACME Storage" "$$PERM_CHECK"; \
 	echo -e "$(CLR_CYAN)╚══════════════════════════════════════════════════════════════════════════════╝$(CLR_RESET)"; \
 	echo ""
 
@@ -234,7 +860,7 @@ check-docker:
 	fi
 
 # End-to-end setup orchestrator
-setup-all: init-env setup-firewall setup-certs setup-auth setup-acme setup-cloudflare setup-dashboard report reload-if-running
+setup-all: init-env setup-firewall setup-certs setup-auth setup-acme setup-cloudflare setup-dashboard setup-crowdsec setup-metrics setup-tracing report reload-if-running
 
 install-traefik: check-docker setup-all
 	@if [ -z "$$(sudo docker compose ps -q traefik 2>/dev/null)" ] && [ -z "$$(sudo docker ps -q -f name=^/traefik$$ 2>/dev/null)" ]; then \
