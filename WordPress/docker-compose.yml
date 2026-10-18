@@ -30,7 +30,7 @@ services:
     networks:
       - my_network
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:80"]
+      test: ["CMD", "curl", "--fail", "http://localhost:80/wp-includes/version.php"]
       interval: 30s
       timeout: 10s
       retries: 5
