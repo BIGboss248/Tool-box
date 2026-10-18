@@ -1,0 +1,189 @@
+# =============================================================================
+# Nexora Panel - Production Docker Compose Stack
+# =============================================================================
+# Control plane for Nexora VPN/Proxy fleet management.
+#
+# Supported Deployment Modes:
+#   1. Standalone Panel (SQLite, zero dependencies) - Default
+#   2. High-Scale Panel (PostgreSQL 17) - profile: postgres
+#   3. Same-Server Panel + Node - profile: node
+#   4. Fleet Monitoring (Prometheus + Grafana) - profile: monitoring
+#   5. Traefik Reverse Proxy Integration - automatic SSL & CrowdSec protection
+#
+# Quickstart:
+#   make setup-all       # Guided end-to-end interactive setup wizard
+#   make token           # Retrieve one-time setup wizard link
+#   make report          # Display configuration and service status box
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Nexora Panel Service (Control Plane)
+  # ---------------------------------------------------------------------------
+  panel:
+    image: ${NEXORA_IMAGE:-ghcr.io/nexora-vpn/panel:latest}
+    restart: unless-stopped
+    container_name: nexora-panel
+    hostname: nexora-panel
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+    environment:
+      # Pin listening address inside the container.
+      NEXORA_WEB_LISTEN: "[::]:${NEXORA_PORT:-2095}"
+      # Database configuration (sqlite or postgres)
+      NEXORA_DB_DRIVER: ${NEXORA_DB_DRIVER:-sqlite}
+      NEXORA_DB_DSN: ${NEXORA_DB_DSN:-/app/db/nexora.db}
+      NEXORA_DB_MAX_OPEN_CONNS: ${NEXORA_DB_MAX_OPEN_CONNS:-25}
+    volumes:
+      # SQLite database storage (ignored when using PostgreSQL)
+      - ./data:/app/db
+      # Persistent backup archives (dumped by the panel itself)
+      - ./backups:/var/opt/nexora/backups
+      - ./backups:/app/db/backups
+      # Mirrored rule-set files cached by the panel and pushed to nodes
+      - ./rulesets:/var/opt/nexora/rulesets
+      - ./rulesets:/app/db/rulesets
+      # Staged node binaries served to external node installers
+      - ./bin:/app/bin
+      # Subscription page themes
+      - ./sub-themes:/app/sub-themes:ro
+      # Host machine-id for stable hardware ID licensing
+      - ${MACHINE_ID_PATH:-/etc/machine-id}:/etc/machine-id:ro
+    ports:
+      - "${NEXORA_BIND_IP:-0.0.0.0}:${NEXORA_PORT:-2095}:${NEXORA_PORT:-2095}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - nexora-net
+    labels:
+      - "traefik.enable=${TRAEFIK_ENABLED:-false}"
+      - "traefik.http.routers.nexora.rule=Host(`${NEXORA_DOMAIN:-nexora.example.com}`)"
+      - "traefik.http.routers.nexora.entrypoints=websecure"
+      - "traefik.http.routers.nexora.tls=true"
+      - "traefik.http.routers.nexora.tls.certresolver=${TRAEFIK_CERTRESOLVER:-myresolver}"
+      - "traefik.http.services.nexora.loadbalancer.server.port=${NEXORA_PORT:-2095}"
+      - "traefik.http.services.nexora.loadbalancer.server.scheme=http"
+      # Optional CrowdSec IPS middleware integration with Traefik:
+      # - "traefik.http.routers.nexora.middlewares=crowdsec-bouncer@docker"
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Service (High-Scale Database Engine)
+  # Activated via: COMPOSE_PROFILES=postgres
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    container_name: nexora-postgres
+    profiles:
+      - postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nexora}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_DB: ${POSTGRES_DB:-nexora}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nexora} -d ${POSTGRES_DB:-nexora}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - nexora-net
+
+  # ---------------------------------------------------------------------------
+  # Optional Same-Server Node Service (Testing & Lab Deployments)
+  # Activated via: COMPOSE_PROFILES=node
+  # Note: Host networking is required for client traffic & loopback control.
+  # ---------------------------------------------------------------------------
+  node:
+    image: ${NEXORA_NODE_IMAGE:-ghcr.io/nexora-vpn/node:latest}
+    restart: unless-stopped
+    container_name: nexora-node
+    profiles:
+      - node
+    depends_on:
+      - panel
+    environment:
+      NEXORA_NODE_LISTEN: "127.0.0.1:${NEXORA_NODE_PORT:-62050}"
+      NEXORA_NODE_CERT: /app/certs/ssl_cert.pem
+      NEXORA_NODE_KEY: /app/certs/ssl_key.pem
+      NEXORA_NODE_CLIENT_CA: /app/certs/panel_ca.pem
+    volumes:
+      - ./certs:/app/certs
+      - ./cache:/app/cache
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+
+  # ---------------------------------------------------------------------------
+  # Prometheus Metrics Service (Fleet Scraping)
+  # Activated via: COMPOSE_PROFILES=monitoring
+  # ---------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    container_name: nexora-prometheus
+    profiles:
+      - monitoring
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-365d}
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/token:/etc/prometheus/token:ro
+      - promdata:/prometheus
+    networks:
+      - nexora-net
+
+  # ---------------------------------------------------------------------------
+  # Grafana Dashboard Service (Fleet Visualization)
+  # Activated via: COMPOSE_PROFILES=monitoring
+  # ---------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    container_name: nexora-grafana
+    profiles:
+      - monitoring
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-change-me}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000}
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports:
+      - "${GRAFANA_BIND_IP:-127.0.0.1}:${GRAFANA_PORT:-3000}:3000"
+    networks:
+      - nexora-net
+    labels:
+      - "traefik.enable=${GRAFANA_TRAEFIK_ENABLED:-false}"
+      - "traefik.http.routers.grafana.rule=Host(`${GRAFANA_DOMAIN:-grafana.example.com}`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls=true"
+      - "traefik.http.routers.grafana.tls.certresolver=${TRAEFIK_CERTRESOLVER:-myresolver}"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+
+# -----------------------------------------------------------------------------
+# Networks
+# -----------------------------------------------------------------------------
+networks:
+  nexora-net:
+    name: ${DOCKER_NETWORK:-my_network}
+    driver: bridge
+
+# -----------------------------------------------------------------------------
+# Named Volumes
+# -----------------------------------------------------------------------------
+volumes:
+  pgdata:
+  promdata:
+  grafanadata:
+

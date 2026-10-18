@@ -1,0 +1,20 @@
+# Environment & Secrets
+.env
+machine-id
+monitoring/prometheus/token
+
+# Database & Cache
+data/
+*.db
+*.db-wal
+*.db-shm
+cache/
+
+# Backups & Archives
+backups/
+*.tar.gz
+
+# Node Certificates
+certs/*.pem
+!certs/.gitkeep
+

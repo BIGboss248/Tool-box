@@ -1,0 +1,46 @@
+# Prometheus and Grafana overlay for Nexora Panel.
+# Can be run as an overlay:
+#   docker compose -f docker-compose.yml -f monitoring/docker-compose.monitoring.yml up -d
+# Or via profiles in .env:
+#   COMPOSE_PROFILES=monitoring
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    container_name: nexora-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-365d}
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/token:/etc/prometheus/token:ro
+      - promdata:/prometheus
+    networks:
+      - nexora-net
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    container_name: nexora-grafana
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-change-me}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000}
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports:
+      - "${GRAFANA_BIND_IP:-127.0.0.1}:${GRAFANA_PORT:-3000}:3000"
+    networks:
+      - nexora-net
+
+volumes:
+  promdata:
+  grafanadata:
+

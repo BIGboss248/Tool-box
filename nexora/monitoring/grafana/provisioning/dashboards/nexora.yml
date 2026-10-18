@@ -1,0 +1,15 @@
+# Load every dashboard JSON in the mounted directory.
+apiVersion: 1
+
+providers:
+  - name: nexora
+    orgId: 1
+    folder: Nexora
+    type: file
+    disableDeletion: false
+    # Re-read the files periodically, so editing the JSON on disk and waiting is enough - no restart.
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+
