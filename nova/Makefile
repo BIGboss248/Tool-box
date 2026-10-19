@@ -11,6 +11,7 @@ help:
 	@echo "  make status       - Show container status"
 	@echo "  make down         - Stop and remove container"
 	@echo "  make restart      - Restart container"
+	@echo "  make install      - install Nova"
 
 deploy: open-ports up
 
@@ -69,3 +70,6 @@ down:
 
 restart:
 	sudo docker compose restart
+
+install: open-ports
+	sudo bash <(curl -fsSL https://raw.githubusercontent.com/IRNova/Nova-Server/main/nova-node.sh)
