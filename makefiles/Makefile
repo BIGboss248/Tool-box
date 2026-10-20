@@ -46,34 +46,16 @@ kompose:
 docker:
 	@if command -v docker >/dev/null 2>&1; \
 	then \
-		echo -e "\e[32mDocker already installed\e[0m"; \
+		echo -e "\e[32mDocker already installed: $$(docker --version)\e[0m"; \
 	else \
-		for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do sudo apt-get remove $$pkg -y; done; \
-		# Add Docker's official GPG key: \
-		sudo apt-get update -y; \
-		sudo apt-get install ca-certificates curl -y; \
-		sudo install -m 0755 -d /etc/apt/keyrings; \
-		sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc; \
-		sudo chmod a+r /etc/apt/keyrings/docker.asc; \
-		# Add the repository to Apt sources: \
-		echo "deb [arch=$$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $$(. /etc/os-release && echo "$$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null; \
-		sudo apt-get update -y; \
-		sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y --fix-missing; \
-		sudo groupadd docker || true; \
-		sudo usermod -aG docker $$USER && newgrp docker; \
-		sudo chown "$$USER":"$$USER" /home/"$$USER"/.docker -R || true; \
-		sudo chmod g+rwx "$$HOME/.docker" -R || true; \
-		sudo systemctl enable docker.service; \
-		sudo systemctl enable containerd.service; \
-		code --install-extension ms-azuretools.vscode-docker; \
-		echo -e "\e[32mFor vscode extentions reboot is needed\e[0m"; \
-		sudo iptables -I FORWARD -p tcp -j ACCEPT -i docker0; \
-		sudo apt install iptables-persistent; \
-		sudo bash -c iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null; \
-		sudo netfilter-persistent save	sudo apt install iptables-persistent; \
-		sudo bash -c iptables-save | sudo tee /etc/iptables/rules.v4 >/dev/null; \
-		sudo netfilter-persistent save; \
+		curl -fsSL https://get.docker.com | sudo sh; \
 	fi
+	sudo groupadd docker || true
+	sudo usermod -aG docker $$USER
+	[ -d "$$HOME/.docker" ] && sudo chown -R "$$USER":"$$USER" "$$HOME/.docker" && chmod -R g+rwx "$$HOME/.docker" || true
+	sudo systemctl enable --now docker.service containerd.service || true
+	code --install-extension ms-azuretools.vscode-docker || true
+	@echo -e "\e[32mDocker configured for user $$USER. Relog or run 'newgrp docker' to apply.\e[0m"
 
 minikube: kubernetes
 	if minikube version;\
