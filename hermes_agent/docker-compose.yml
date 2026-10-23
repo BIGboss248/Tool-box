@@ -1,0 +1,45 @@
+---
+services:
+  hermes:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes
+    hostname: hermes
+    restart: unless-stopped
+    command: gateway run
+    ports:
+      - "${HERMES_PORT:-8642}:8642"
+    volumes:
+      - ./data:/opt/data
+      # Mount host SSH keys if you want Hermes to manage other VPS servers via SSH
+      # - ~/.ssh:/opt/data/.ssh:ro
+    environment:
+      - HERMES_HOME=/opt/data
+      - TZ=${TZ:-UTC}
+      # Model Provider Keys (Uncomment or set in .env)
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # Messaging Gateway Credentials
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS:-}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+      # Home Assistant Integration
+      - HASS_URL=${HASS_URL:-}
+      - HASS_TOKEN=${HASS_TOKEN:-}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8642/health 2>/dev/null || exit 0"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - my_network
+
+volumes:
+  data:
+
+networks:
+  my_network:
+    driver: bridge
+    name: my_network
