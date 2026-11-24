@@ -4,7 +4,7 @@ SHELL = /bin/bash
 # `make up SUDO=` when your user is already in the docker group.
 SUDO ?= sudo
 
-.PHONY: help check-docker init setup up down restart logs status shell wizard login report resolvers
+.PHONY: help check-docker init setup up down restart logs status shell wizard login check-key report resolvers
 
 # Color definitions
 CLR_RESET   = \033[0m
@@ -29,7 +29,8 @@ help:
 	@printf "  $(CLR_GREEN)make init$(CLR_RESET)       - Create .env, data/ and data/config.yaml, generate the session secret\n"
 	@printf "  $(CLR_GREEN)make up$(CLR_RESET)         - Start the container (runs init first)\n"
 	@printf "  $(CLR_GREEN)make down$(CLR_RESET)       - Stop and remove the container\n"
-	@printf "  $(CLR_GREEN)make restart$(CLR_RESET)    - Restart the gateway\n"
+	@printf "  $(CLR_GREEN)make restart$(CLR_RESET)    - Recreate the container so .env changes apply\n"
+	@printf "  $(CLR_GREEN)make check-key$(CLR_RESET)  - Test the OpenCode key in .env against the Go endpoint\n"
 	@printf "  $(CLR_GREEN)make logs$(CLR_RESET)       - Follow container output\n"
 	@printf "  $(CLR_GREEN)make status$(CLR_RESET)     - Container and healthcheck state\n"
 	@printf "  $(CLR_GREEN)make shell$(CLR_RESET)      - Bash inside the container\n"
@@ -71,7 +72,8 @@ down: check-docker
 	$(SUDO) docker compose down
 
 restart: check-docker
-	$(SUDO) docker compose restart
+	@printf "$(CLR_CYAN)[*] Recreating the container so .env and config changes apply...$(CLR_RESET)\n"
+	$(SUDO) docker compose up -d --force-recreate
 
 logs: check-docker
 	$(SUDO) docker compose logs -f
@@ -108,6 +110,58 @@ check-docker:
 		printf "$(CLR_YELLOW)[*] If your user is in the docker group, run: make <target> SUDO=$(CLR_RESET)\n"; \
 		exit 1; \
 	fi
+
+# Test the key Hermes will use. Explains a 401 instead of leaving it opaque.
+check-key: init
+	@KEY=$$(grep -E '^OPENCODE_GO_API_KEY=' .env 2>/dev/null | head -n1 | cut -d '=' -f2-); \
+	DATA_KEY=$$(grep -E '^OPENCODE_GO_API_KEY=' data/.env 2>/dev/null | head -n1 | cut -d '=' -f2-); \
+	MODEL=$$(awk '/^model:/{m=1;next} m&&/^[^[:space:]#]/{m=0} m&&$$1=="default:"{print $$2;exit}' data/config.yaml 2>/dev/null); \
+	if [ -z "$$KEY" ]; then \
+		printf "$(CLR_RED)[!] No OPENCODE_GO_API_KEY in .env. Run make setup.$(CLR_RESET)\n"; \
+		exit 1; \
+	fi; \
+	MODEL=$${MODEL:-deepseek-v4.1-flash}; \
+	printf "$(CLR_CYAN)[*] .env key: $(CLR_WHITE)%s...$(CLR_RESET) (%s chars)\n" "$$(printf '%s' "$$KEY" | cut -c1-10)" "$${#KEY}"; \
+	case "$$KEY" in \
+		*[[:space:]]*) printf "$(CLR_RED)[!] The key contains whitespace, which makes it invalid.$(CLR_RESET)\n" ;; \
+	esac; \
+	if [ "$$KEY" != "$$(printf '%s' "$$KEY" | tr -d '\r')" ]; then \
+		printf "$(CLR_RED)[!] The key ends with a carriage return (CRLF file). Remove it.$(CLR_RESET)\n"; \
+	fi; \
+	if [ -n "$$DATA_KEY" ]; then \
+		if [ "$$DATA_KEY" = "$$KEY" ]; then \
+			printf "$(CLR_GREEN)[✔] data/.env holds the same key.$(CLR_RESET)\n"; \
+		else \
+			printf "$(CLR_YELLOW)[!] data/.env holds a DIFFERENT key: %s...$(CLR_RESET)\n" "$$(printf '%s' "$$DATA_KEY" | cut -c1-10)"; \
+			printf "$(CLR_YELLOW)    Hermes reads that file too. Delete the line, or set it to the new key.$(CLR_RESET)\n"; \
+		fi; \
+	fi; \
+	if command -v docker >/dev/null 2>&1 && [ -n "$$($(SUDO) docker compose ps -q hermes 2>/dev/null)" ]; then \
+		CT_KEY=$$($(SUDO) docker compose exec -T hermes printenv OPENCODE_GO_API_KEY 2>/dev/null | tr -d '\r'); \
+		if [ -n "$$CT_KEY" ] && [ "$$CT_KEY" != "$$KEY" ]; then \
+			printf "$(CLR_RED)[!] The running container still uses a different key: %s...$(CLR_RESET)\n" "$$(printf '%s' "$$CT_KEY" | cut -c1-10)"; \
+			printf "$(CLR_YELLOW)    Run make restart to recreate it with the current .env.$(CLR_RESET)\n"; \
+		else \
+			printf "$(CLR_GREEN)[✔] The running container uses the key from .env.$(CLR_RESET)\n"; \
+		fi; \
+	fi; \
+	printf '{"model":"%s","messages":[{"role":"user","content":"ping"}],"max_tokens":1}' "$$MODEL" > /tmp/hermes-keycheck.body; \
+	code=$$(curl -s -o /tmp/hermes-keycheck.json -w '%{http_code}' \
+		https://opencode.ai/inference/go/openai/v1/chat/completions \
+		-H "Authorization: Bearer $$KEY" \
+		-H 'Content-Type: application/json' \
+		-H 'x-opencode-session: hermes-key-check' \
+		--data @/tmp/hermes-keycheck.body 2>/dev/null); \
+	printf "$(CLR_CYAN)[*] Model: %s$(CLR_RESET)\n" "$$MODEL"; \
+	case "$$code" in \
+		200) printf "$(CLR_GREEN)[✔] Key works: HTTP 200.$(CLR_RESET)\n" ;; \
+		401) printf "$(CLR_RED)[!] HTTP 401 Invalid credential: the key is revoked, expired, mistyped, or from another workspace.$(CLR_RESET)\n" ;; \
+		403) printf "$(CLR_RED)[!] HTTP 403: the key is valid but not allowed to use %s. Check the key permissions (Models: Request) and the plan.$(CLR_RESET)\n" "$$MODEL" ;; \
+		429) printf "$(CLR_YELLOW)[!] HTTP 429: the key is valid but rate limited or out of budget.$(CLR_RESET)\n" ;; \
+		000) printf "$(CLR_RED)[!] No HTTP response: the VPS could not reach opencode.ai.$(CLR_RESET)\n" ;; \
+		*) printf "$(CLR_RED)[!] HTTP %s$(CLR_RESET)\n" "$$code" ;; \
+	esac; \
+	head -c 300 /tmp/hermes-keycheck.json 2>/dev/null; printf '\n'
 
 # Certificate resolvers defined in the Traefik compose file
 resolvers:	@if [ ! -f "$(TRAEFIK_COMPOSE)" ]; then \

@@ -229,6 +229,26 @@ The client URL is `https://api.$DOMAIN/v1`, with `HERMES_API_KEY` as the bearer 
 
 ---
 
+## Troubleshooting
+
+### 401 after replacing the API key
+
+The Go endpoint answers a bad credential with `401 {"error":{"type":"authentication_error","message":"Invalid credential"}}`. The model list is public, so Hermes starts and lists models fine and only fails when it sends a message. Check in this order:
+
+1. **The container still holds the old key.** `docker compose restart` keeps the old environment, so a revoked key keeps being sent. Recreate the container instead:
+
+   ```bash
+   make restart        # docker compose up -d --force-recreate
+   ```
+
+2. **A copy of the old key lives in `data/.env`.** `make login` and the dashboard API Keys page write there, and Hermes reads that file too. Delete the `OPENCODE_GO_API_KEY=` line or set it to the new key.
+
+3. **The key itself.** It is shown once, so a truncated paste, a revoked key, an expired key, or a key created in a different workspace all give 401. A valid key that is not allowed to use the model gives **403**, not 401.
+
+`make check-key` checks all three at once: it prints the key prefix from `.env`, warns about whitespace and CRLF, reports a mismatched `data/.env`, compares the running container's environment, then calls the Go endpoint with the configured model and explains the status code.
+
+---
+
 ## Maintenance
 
 | Command | Action |
@@ -240,7 +260,8 @@ The client URL is `https://api.$DOMAIN/v1`, with `HERMES_API_KEY` as the bearer 
 | `make init` | Create `.env`, `data/`, `data/config.yaml`, generate the session secret |
 | `make up` | Create `data/` if missing, then start |
 | `make down` | Stop and remove the container |
-| `make restart` | Restart the gateway |
+| `make restart` | Recreate the container so `.env` and config changes apply |
+| `make check-key` | Test the key in `.env` against the OpenCode Go endpoint |
 | `make logs` | Follow container output |
 | `make status` | Container and healthcheck state |
 | `make cli` | Hermes CLI inside the container |
