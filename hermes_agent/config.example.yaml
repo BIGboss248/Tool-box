@@ -1,0 +1,18 @@
+# Seed config for Hermes. `make init` copies this to data/config.yaml once, then
+# Hermes owns that file: edit data/config.yaml on the host, use the dashboard
+# Config page, or type /model inside a chat.
+#
+# Missing keys fall back to Hermes defaults, so only what you want to override
+# belongs here.
+
+model:
+  provider: opencode-go
+  # DeepSeek V4.1 Flash 1017. Other Go models work too: glm-5.3, glm-5.3-flash,
+  # kimi-k3, kimi-k3.1-pro, qwen3.8-max, grok-4.7, claude-haiku-5-5
+  default: deepseek-v4.1-flash
+
+# Uncomment to let Traefik's container IP supply X-Forwarded-Proto, so login
+# cookies are marked Secure. Set it to this stack's Docker subnet.
+# dashboard:
+#   trusted_proxies:
+#     - 172.18.0.0/16

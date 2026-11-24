@@ -11,5 +11,8 @@ node_modules
 # Environment files
 .env
 traefik/acme.json
+
+# Hermes Agent runtime home (config.yaml, .env with API keys, sessions)
+hermes_agent/data/
 traefik/logs/
 

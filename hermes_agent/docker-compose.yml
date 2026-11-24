@@ -6,38 +6,38 @@ services:
     hostname: hermes
     restart: unless-stopped
     command: gateway run
-    ports:
-      - "${HERMES_PORT:-8642}:8642"
     volumes:
+      # Holds config.yaml, .env, sessions, memory and skills. Back this up.
       - ./data:/opt/data
-      # Mount host SSH keys if you want Hermes to manage other VPS servers via SSH
-      # - ~/.ssh:/opt/data/.ssh:ro
     environment:
       - HERMES_HOME=/opt/data
-      - TZ=${TZ:-UTC}
-      # Model Provider Keys (Uncomment or set in .env)
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
-      - GROQ_API_KEY=${GROQ_API_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      # Messaging Gateway Credentials
+      - TZ=${TZ:-Asia/Tehran}
+      # OpenCode Go subscription. The active provider and model live in data/config.yaml.
+      - OPENCODE_GO_API_KEY=${OPENCODE_GO_API_KEY:-}
+      # Telegram
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS:-}
-      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
-      # Home Assistant Integration
-      - HASS_URL=${HASS_URL:-}
-      - HASS_TOKEN=${HASS_TOKEN:-}
+      # Web dashboard (port 9119 in the container), published by Traefik
+      - HERMES_DASHBOARD=1
+      - HERMES_DASHBOARD_PUBLIC_URL=https://${DOMAIN}
+      - HERMES_DASHBOARD_BASIC_AUTH_USERNAME=${HERMES_DASHBOARD_USERNAME:-}
+      - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=${HERMES_DASHBOARD_PASSWORD:-}
+      - HERMES_DASHBOARD_BASIC_AUTH_SECRET=${HERMES_DASHBOARD_SECRET:-}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.hermes.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.hermes.entrypoints=websecure"
+      - "traefik.http.routers.hermes.tls=true"
+      - "traefik.http.routers.hermes.tls.certresolver=${CERT_RESOLVER:-cloudflare_resolver}"
+      - "traefik.http.services.hermes.loadbalancer.server.port=9119"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8642/health 2>/dev/null || exit 0"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9119/api/status >/dev/null || exit 1"]
       interval: 1m
       timeout: 10s
       retries: 3
-      start_period: 20s
+      start_period: 60s
     networks:
       - my_network
-
-volumes:
-  data:
 
 networks:
   my_network:
