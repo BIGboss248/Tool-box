@@ -26,6 +26,8 @@ services:
       # Entrypoints
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
+      # Arcane remote agents: keep long-lived gRPC tunnels open (default read timeout is 60s)
+      - "--entrypoints.websecure.transport.respondingtimeouts.readtimeout=0s"
       - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
       - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
       # Trust Cloudflare Proxies & local Docker/reverse proxies so Traefik logs and uses the client's real IP:

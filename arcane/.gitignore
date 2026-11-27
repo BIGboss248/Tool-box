@@ -1,0 +1,6 @@
+# Runtime configuration and bind-mounted data
+.env
+data/
+projects/
+builds/
+backups/

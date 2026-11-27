@@ -1,0 +1,97 @@
+# Arcane - self-hosted Docker management UI
+# Installation: https://getarcane.app/docs/get-started/installation
+# Traefik:      https://getarcane.app/docs/networking/reverse-proxy
+#
+# This stack uses bind mounts only (no named volumes). Host paths live in .env.
+services:
+  arcane:
+    image: ${ARCANE_IMAGE:-ghcr.io/getarcaneapp/manager:latest}
+    container_name: ${ARCANE_CONTAINER_NAME:-arcane}
+    hostname: arcane
+    restart: unless-stopped
+    # Host cgroup namespace is required for accurate host resource usage.
+    cgroup: host
+
+    ports:
+      # Loopback by default: Traefik terminates TLS and proxies to arcane:3552.
+      # Set ARCANE_BIND=0.0.0.0 to expose 3552 on every interface.
+      - "${ARCANE_BIND:-127.0.0.1}:${ARCANE_PORT:-3552}:3552"
+
+    environment:
+      # Public URL users open (no :3552 when behind Traefik).
+      - ARCANE_APP_URL=${ARCANE_APP_URL:-http://localhost:3552}
+      # Traefik terminates TLS; Arcane serves plain HTTP + h2c internally.
+      # h2c is required for remote-agent gRPC tunnels.
+      - ARCANE_TLS_ENABLED=${ARCANE_TLS_ENABLED:-false}
+      # Required. Generate with: make setup-secret
+      - ARCANE_ENCRYPTION_KEY=${ARCANE_ENCRYPTION_KEY:?ARCANE_ENCRYPTION_KEY is required, run make setup-secret}
+      # CIDR of the Traefik network, so Arcane trusts X-Forwarded-For.
+      - ARCANE_TRUSTED_PROXIES=${ARCANE_TRUSTED_PROXIES:-172.18.0.0/16}
+      # Projects folder as seen inside the container (matches the bind mount below).
+      - ARCANE_PROJECTS_DIRECTORY=${ARCANE_PROJECTS_DIRECTORY:-/opt/docker}
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-UTC}
+      # Optional: first-run admin credentials. Only read on an empty database.
+      # - ARCANE_DEFAULT_ADMIN_USERNAME=arcane
+      # - ARCANE_DEFAULT_ADMIN_PASSWORD=
+      # Optional: external Postgres instead of the bundled SQLite database.
+      # - ARCANE_DATABASE_URL=postgres://user:password@postgres:5432/arcane
+
+    volumes:
+      # Docker socket: required to manage containers on this host.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Bind mounts instead of named volumes (change host paths in .env).
+      - ${ARCANE_DATA_DIR:-./data}:/app/data
+      - ${ARCANE_PROJECTS_DIR:-./projects}:${ARCANE_PROJECTS_DIRECTORY:-/opt/docker}
+      - ${ARCANE_BUILDS_DIR:-./builds}:/builds
+      - ${ARCANE_BACKUPS_DIR:-./backups}:/backups
+      - /etc/localtime:/etc/localtime:ro
+
+    healthcheck:
+      test: ["CMD", "./arcane", "health", "--timeout", "2s"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      # Allows first-boot database migrations to finish before failures count.
+      start_period: 15s
+
+    networks:
+      - my_network
+
+    labels:
+      - "traefik.enable=${TRAEFIK_ENABLE:-true}"
+      - "traefik.docker.network=${DOCKER_NETWORK:-my_network}"
+
+      # --- Web UI + WebSocket router (everything except the gRPC tunnel) ---
+      - "traefik.http.routers.arcane-web.rule=Host(`${ARCANE_DOMAIN:-arcane.example.com}`)"
+      - "traefik.http.routers.arcane-web.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.arcane-web.priority=10"
+      - "traefik.http.routers.arcane-web.tls=true"
+      - "traefik.http.routers.arcane-web.tls.certresolver=${TRAEFIK_CERTRESOLVER:-myresolver}"
+      - "traefik.http.routers.arcane-web.service=arcane-web"
+      - "traefik.http.routers.arcane-web.middlewares=${ARCANE_MIDDLEWARES:-arcane-compress,arcane-headers}"
+      - "traefik.http.services.arcane-web.loadbalancer.server.port=3552"
+      - "traefik.http.services.arcane-web.loadbalancer.server.scheme=http"
+
+      # --- gRPC tunnel router for remote agents (POST /api/tunnel/connect) ---
+      # Long-lived streams need the websecure read timeout disabled; this is
+      # already set in ../traefik/docker-compose.yml
+      # (--entrypoints.websecure.transport.respondingtimeouts.readtimeout=0s).
+      - "traefik.http.routers.arcane-grpc.rule=Host(`${ARCANE_DOMAIN:-arcane.example.com}`) && Path(`/api/tunnel/connect`) && Method(`POST`) && HeaderRegexp(`Content-Type`, `^application/grpc`)"
+      - "traefik.http.routers.arcane-grpc.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.arcane-grpc.priority=100"
+      - "traefik.http.routers.arcane-grpc.tls=true"
+      - "traefik.http.routers.arcane-grpc.tls.certresolver=${TRAEFIK_CERTRESOLVER:-myresolver}"
+      - "traefik.http.routers.arcane-grpc.service=arcane-grpc"
+      - "traefik.http.services.arcane-grpc.loadbalancer.server.port=3552"
+      - "traefik.http.services.arcane-grpc.loadbalancer.server.scheme=h2c"
+
+      # --- Middlewares referenced by ARCANE_MIDDLEWARES ---
+      - "traefik.http.middlewares.arcane-compress.compress=true"
+      - "traefik.http.middlewares.arcane-headers.headers.customresponseheaders.X-Robots-Tag=noindex, nofollow"
+
+networks:
+  my_network:
+    name: ${DOCKER_NETWORK:-my_network}
+    driver: bridge
