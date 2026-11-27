@@ -81,9 +81,18 @@ it to `/app/data/initial-admin-password` — on the host that is
 `./data/initial-admin-password`.
 
 ```bash
-make password           # prints it from the container
+make password           # reads the bind-mounted file, sudo if needed
 # or
-cat ./data/initial-admin-password
+sudo cat ./data/initial-admin-password
+```
+
+The image is shell-less (no `cat` inside), so `make password` reads `./data`
+directly and falls back to `docker cp` streaming. The manual equivalent from
+the upstream docs also works:
+
+```bash
+docker compose cp arcane:/app/data/initial-admin-password .
+sudo cat initial-admin-password
 ```
 
 Sign in at `ARCANE_APP_URL` as `arcane`, then set a new password. The file is

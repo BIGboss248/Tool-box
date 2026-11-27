@@ -306,17 +306,31 @@ health:
 logs:
 	@$(COMPOSE) logs -f --tail=200
 
-# Print the first-run admin password (written to the bind-mounted data dir)
+# Print the first-run admin password. The image has no shell or cat, so read
+# the bind-mounted file (sudo if needed) or stream it out with docker cp.
 password:
-	@pw=$$($(DOCKER) exec "$(ARCANE_CONTAINER_NAME)" cat /app/data/initial-admin-password 2>/dev/null); \
+	@file="$(ARCANE_DATA_DIR)/initial-admin-password"; \
+	pw=""; \
+	if [ -f "$$file" ]; then \
+		pw=$$(cat "$$file" 2>/dev/null); \
+	fi; \
+	if [ -z "$$pw" ]; then \
+		pw=$$($(FS_SUDO) cat "$$file" 2>/dev/null); \
+	fi; \
+	if [ -z "$$pw" ] && $(DOCKER) inspect "$(ARCANE_CONTAINER_NAME)" >/dev/null 2>&1; then \
+		pw=$$($(DOCKER) cp "$(ARCANE_CONTAINER_NAME):/app/data/initial-admin-password" - 2>/dev/null | tar -xO 2>/dev/null); \
+	fi; \
+	pw=$$(printf '%s' "$$pw" | tr -d '\r\n'); \
 	if [ -n "$$pw" ]; then \
 		echo -e "$(CLR_CYAN)[*] First-run admin credentials:$(CLR_RESET)"; \
 		echo -e "    username: $(CLR_WHITE)arcane$(CLR_RESET)"; \
 		echo -e "    password: $(CLR_WHITE)$$pw$(CLR_RESET)"; \
 		echo -e "$(CLR_YELLOW)[i] Sign in, then set a new password. This file is removed afterwards.$(CLR_RESET)"; \
 	else \
-		echo -e "$(CLR_YELLOW)[i] No initial password file found. The admin password was already set.$(CLR_RESET)"; \
-		echo -e "    The bind-mounted copy lives at $(CLR_CYAN)$(ARCANE_DATA_DIR)/initial-admin-password$(CLR_RESET)"; \
+		echo -e "$(CLR_YELLOW)[i] No readable initial-admin-password file found.$(CLR_RESET)"; \
+		echo -e "    Either the admin password was already changed, or Arcane has not started yet."; \
+		echo -e "    Host path: $(CLR_CYAN)$$file$(CLR_RESET)"; \
+		echo -e "    Manual copy: $(CLR_CYAN)docker compose cp arcane:/app/data/initial-admin-password . && sudo cat initial-admin-password$(CLR_RESET)"; \
 	fi
 
 update: check-docker
