@@ -2,7 +2,7 @@ SHELL = /bin/bash
 
 .DEFAULT_GOAL := help
 
-.PHONY: help all check-docker init-env ensure-secret setup-secret setup-domain \
+.PHONY: help all check-docker init-env fix-ownership ensure-secret setup-secret setup-domain \
 	setup-proxies setup-all install-arcane deploy down restart status logs health \
 	password update backup report reload-if-running clean clean-all
 
@@ -17,11 +17,16 @@ CLR_MAGENTA = \033[35m
 CLR_CYAN    = \033[36m
 CLR_WHITE   = \033[37m
 
-# Set SUDO=sudo when the current user cannot talk to the Docker daemon directly:
-#   make deploy SUDO=sudo
+# Optional: force sudo for every privileged operation: make deploy SUDO=sudo
 SUDO ?=
-DOCKER = $(SUDO) docker
+# Docker needs root when the current user is not in the docker group. Detect it
+# once so plain `make deploy` works on a docker-group host and still works elsewhere.
+DOCKER_SUDO := $(if $(SUDO),$(SUDO),$(shell if docker info >/dev/null 2>&1; then :; elif command -v sudo >/dev/null 2>&1; then echo sudo; fi))
+DOCKER = $(DOCKER_SUDO) docker
 COMPOSE = $(DOCKER) compose
+# Bind mounts under /srv usually belong to root. These commands try unprivileged
+# first and escalate only when the current user does not have permission.
+FS_SUDO := $(if $(SUDO),$(SUDO),sudo)
 CONTAINER ?= arcane
 ENV_FILE ?= .env
 
@@ -44,7 +49,7 @@ ARCANE_BACKUPS_DIR ?= ./backups
 ARCANE_TRUSTED_PROXIES ?= 172.18.0.0/16
 DOCKER_NETWORK ?= my_network
 TRAEFIK_ENTRYPOINT ?= websecure
-TRAEFIK_CERTRESOLVER ?= myresolver
+TRAEFIK_CERTRESOLVER ?= cloudflare_resolver
 
 help:
 	@echo -e "$(CLR_CYAN)$(CLR_BOLD)Arcane Setup Management$(CLR_RESET)"
@@ -53,6 +58,7 @@ help:
 	@echo -e "  $(CLR_GREEN)make setup-secret$(CLR_RESET)      - Generate (or rotate) the Arcane encryption key"
 	@echo -e "  $(CLR_GREEN)make setup-domain$(CLR_RESET)      - Set public domain, app URL, entrypoint and TLS resolver"
 	@echo -e "  $(CLR_GREEN)make setup-proxies$(CLR_RESET)     - Detect the Docker network CIDR for ARCANE_TRUSTED_PROXIES"
+	@echo -e "  $(CLR_GREEN)make fix-ownership$(CLR_RESET)     - Recursively chown bind mounts to PUID:PGID (escalates if needed)"
 	@echo -e "  $(CLR_GREEN)make deploy$(CLR_RESET)            - Create bind-mount directories and start the stack"
 	@echo -e "  $(CLR_GREEN)make down$(CLR_RESET)              - Stop and remove the container (data is kept)"
 	@echo -e "  $(CLR_GREEN)make restart$(CLR_RESET)           - Recreate the container to apply configuration changes"
@@ -65,6 +71,10 @@ help:
 	@echo -e "  $(CLR_GREEN)make report$(CLR_RESET)            - Display a colored summary of the current configuration"
 	@echo -e "  $(CLR_GREEN)make clean$(CLR_RESET)             - Stop the stack and delete ./data (asks for confirmation)"
 	@echo -e "  $(CLR_GREEN)make clean-all$(CLR_RESET)         - Also delete projects, builds and backups"
+	@echo -e ""
+	@echo -e "  $(CLR_YELLOW)Docker uses sudo automatically when the user is not in the docker group.$(CLR_RESET)"
+	@echo -e "  $(CLR_YELLOW)Bind-mount paths under /srv escalate with sudo only on permission errors.$(CLR_RESET)"
+	@echo -e "  $(CLR_YELLOW)Force sudo everywhere with: make <target> SUDO=sudo$(CLR_RESET)"
 
 all: deploy
 
@@ -81,18 +91,63 @@ check-docker:
 		exit 1; \
 	fi
 
-# Ensure .env exists and create the bind-mount directories
+# Ensure .env exists and create the bind-mount directories. Commands escalate
+# with sudo only when the path is not writable, which is normal for /srv.
 init-env:
 	@if [ ! -f $(ENV_FILE) ]; then \
 		echo -e "$(CLR_YELLOW)[*] Creating $(ENV_FILE) from .env.example...$(CLR_RESET)"; \
-		cp .env.example $(ENV_FILE); \
+		if ! cp .env.example $(ENV_FILE) 2>/dev/null; then \
+			echo -e "$(CLR_YELLOW)[*] Escalating to create $(ENV_FILE)...$(CLR_RESET)"; \
+			$(FS_SUDO) cp .env.example $(ENV_FILE); \
+			$(FS_SUDO) chown "$$(id -u):$$(id -g)" $(ENV_FILE); \
+		fi; \
+	fi
+	@if [ -f $(ENV_FILE) ] && [ ! -w $(ENV_FILE) ]; then \
+		echo -e "$(CLR_YELLOW)[*] Taking ownership of $(ENV_FILE)...$(CLR_RESET)"; \
+		$(FS_SUDO) chown "$$(id -u):$$(id -g)" $(ENV_FILE); \
 	fi
 	@echo -e "$(CLR_CYAN)[*] Creating bind-mount directories...$(CLR_RESET)"
-	@mkdir -p "$(ARCANE_DATA_DIR)" "$(ARCANE_PROJECTS_DIR)" "$(ARCANE_BUILDS_DIR)" "$(ARCANE_BACKUPS_DIR)"
-	@if [ "$$(id -u)" = "0" ] && [ -n "$(PUID)" ] && [ -n "$(PGID)" ]; then \
-		chown -R "$(PUID):$(PGID)" "$(ARCANE_DATA_DIR)" "$(ARCANE_PROJECTS_DIR)" "$(ARCANE_BUILDS_DIR)" "$(ARCANE_BACKUPS_DIR)"; \
-	fi
-	@echo -e "$(CLR_GREEN)[✔] Ready: $(ARCANE_DATA_DIR), $(ARCANE_PROJECTS_DIR), $(ARCANE_BUILDS_DIR), $(ARCANE_BACKUPS_DIR)$(CLR_RESET)"
+	@data_dir=$$(grep -E '^ARCANE_DATA_DIR=' $(ENV_FILE) 2>/dev/null | cut -d '=' -f2-); \
+	data_dir=$${data_dir:-$(ARCANE_DATA_DIR)}; \
+	projects_dir=$$(grep -E '^ARCANE_PROJECTS_DIR=' $(ENV_FILE) 2>/dev/null | cut -d '=' -f2-); \
+	projects_dir=$${projects_dir:-$(ARCANE_PROJECTS_DIR)}; \
+	builds_dir=$$(grep -E '^ARCANE_BUILDS_DIR=' $(ENV_FILE) 2>/dev/null | cut -d '=' -f2-); \
+	builds_dir=$${builds_dir:-$(ARCANE_BUILDS_DIR)}; \
+	backups_dir=$$(grep -E '^ARCANE_BACKUPS_DIR=' $(ENV_FILE) 2>/dev/null | cut -d '=' -f2-); \
+	backups_dir=$${backups_dir:-$(ARCANE_BACKUPS_DIR)}; \
+	for d in "$$data_dir" "$$projects_dir" "$$builds_dir" "$$backups_dir"; do \
+		if ! mkdir -p "$$d" 2>/dev/null; then \
+			echo -e "$(CLR_YELLOW)[*] Escalating to create $$d...$(CLR_RESET)"; \
+			$(FS_SUDO) mkdir -p "$$d"; \
+		fi; \
+	done; \
+	puid=$$(grep -E '^PUID=' $(ENV_FILE) 2>/dev/null | cut -d '=' -f2-); \
+	pgid=$$(grep -E '^PGID=' $(ENV_FILE) 2>/dev/null | cut -d '=' -f2-); \
+	puid=$${puid:-65532}; \
+	pgid=$${pgid:-65532}; \
+	for d in "$$data_dir" "$$projects_dir" "$$builds_dir" "$$backups_dir"; do \
+		owner=$$(stat -c '%u:%g' "$$d" 2>/dev/null || stat -f '%u:%g' "$$d" 2>/dev/null); \
+		if [ "$$owner" != "$$puid:$$pgid" ]; then \
+			if ! chown "$$puid:$$pgid" "$$d" 2>/dev/null; then \
+				$(FS_SUDO) chown "$$puid:$$pgid" "$$d"; \
+			fi; \
+		fi; \
+	done; \
+	echo -e "$(CLR_GREEN)[✔] Ready: $$data_dir, $$projects_dir, $$builds_dir, $$backups_dir$(CLR_RESET)"
+
+# Recursively align ownership of existing bind-mount contents (after a migration)
+fix-ownership: init-env
+	@puid=$$(grep -E '^PUID=' $(ENV_FILE) 2>/dev/null | cut -d '=' -f2-); \
+	pgid=$$(grep -E '^PGID=' $(ENV_FILE) 2>/dev/null | cut -d '=' -f2-); \
+	puid=$${puid:-65532}; \
+	pgid=$${pgid:-65532}; \
+	for d in "$(ARCANE_DATA_DIR)" "$(ARCANE_PROJECTS_DIR)" "$(ARCANE_BUILDS_DIR)" "$(ARCANE_BACKUPS_DIR)"; do \
+		echo -e "$(CLR_YELLOW)[*] chown -R $$puid:$$pgid $$d$(CLR_RESET)"; \
+		if ! chown -R "$$puid:$$pgid" "$$d" 2>/dev/null; then \
+			$(FS_SUDO) chown -R "$$puid:$$pgid" "$$d"; \
+		fi; \
+	done; \
+	echo -e "$(CLR_GREEN)[✔] Ownership updated.$(CLR_RESET)"
 
 # Generate the encryption key silently when it is missing (used by deploy)
 ensure-secret: init-env
@@ -164,14 +219,14 @@ setup-domain: init-env
 	set_var ARCANE_APP_URL "https://$$domain"; \
 	echo "Select certificate resolver for Arcane:"; \
 	echo "  1) Let's Encrypt HTTP-01 challenge (myresolver)"; \
-	echo "  2) Cloudflare DNS-01 challenge (cloudflare_resolver)"; \
-	read -p "Choose [1/2, default 1]: " resolver_choice </dev/tty; \
-	if [ "$$resolver_choice" = "2" ]; then \
-		set_var TRAEFIK_CERTRESOLVER "cloudflare_resolver"; \
-		echo -e "$(CLR_GREEN)[✔] Resolver set to 'cloudflare_resolver'.$(CLR_RESET)"; \
-	else \
+	echo "  2) Cloudflare DNS-01 challenge (cloudflare_resolver) [default]"; \
+	read -p "Choose [1/2, default 2]: " resolver_choice </dev/tty; \
+	if [ "$$resolver_choice" = "1" ]; then \
 		set_var TRAEFIK_CERTRESOLVER "myresolver"; \
 		echo -e "$(CLR_GREEN)[✔] Resolver set to 'myresolver'.$(CLR_RESET)"; \
+	else \
+		set_var TRAEFIK_CERTRESOLVER "cloudflare_resolver"; \
+		echo -e "$(CLR_GREEN)[✔] Resolver set to 'cloudflare_resolver'.$(CLR_RESET)"; \
 	fi; \
 	echo -e "$(CLR_GREEN)[✔] ARCANE_DOMAIN=$$domain, ARCANE_APP_URL=https://$$domain$(CLR_RESET)"
 	@$(MAKE) --no-print-directory reload-if-running
@@ -281,7 +336,9 @@ backup: init-env
 		$(COMPOSE) stop >/dev/null; \
 	fi; \
 	echo -e "$(CLR_CYAN)[*] Writing $$out...$(CLR_RESET)"; \
-	if tar -czf "$$out" -C "$(ARCANE_DATA_DIR)" .; then \
+	if tar -czf "$$out" -C "$(ARCANE_DATA_DIR)" . 2>/dev/null; then \
+		echo -e "$(CLR_GREEN)[✔] Backup created: $$out$(CLR_RESET)"; \
+	elif echo -e "$(CLR_YELLOW)[*] Escalating to read the data directory...$(CLR_RESET)" && $(FS_SUDO) tar -czf "$$out" -C "$(ARCANE_DATA_DIR)" .; then \
 		echo -e "$(CLR_GREEN)[✔] Backup created: $$out$(CLR_RESET)"; \
 	else \
 		echo -e "$(CLR_RED)[!] Backup failed.$(CLR_RESET)"; \
@@ -333,7 +390,10 @@ clean:
 		exit 0; \
 	fi; \
 	$(COMPOSE) down; \
-	rm -rf "$(ARCANE_DATA_DIR)"; \
+	if ! rm -rf "$(ARCANE_DATA_DIR)" 2>/dev/null; then \
+		echo -e "$(CLR_YELLOW)[*] Escalating to remove $(ARCANE_DATA_DIR)...$(CLR_RESET)"; \
+		$(FS_SUDO) rm -rf "$(ARCANE_DATA_DIR)"; \
+	fi; \
 	echo -e "$(CLR_GREEN)[✔] $(ARCANE_DATA_DIR) removed.$(CLR_RESET)"
 
 clean-all:
@@ -344,5 +404,10 @@ clean-all:
 		exit 0; \
 	fi; \
 	$(COMPOSE) down; \
-	rm -rf "$(ARCANE_DATA_DIR)" "$(ARCANE_PROJECTS_DIR)" "$(ARCANE_BUILDS_DIR)" "$(ARCANE_BACKUPS_DIR)"; \
+	for d in "$(ARCANE_DATA_DIR)" "$(ARCANE_PROJECTS_DIR)" "$(ARCANE_BUILDS_DIR)" "$(ARCANE_BACKUPS_DIR)"; do \
+		if ! rm -rf "$$d" 2>/dev/null; then \
+			echo -e "$(CLR_YELLOW)[*] Escalating to remove $$d...$(CLR_RESET)"; \
+			$(FS_SUDO) rm -rf "$$d"; \
+		fi; \
+	done; \
 	echo -e "$(CLR_GREEN)[✔] Bind-mount directories removed.$(CLR_RESET)"

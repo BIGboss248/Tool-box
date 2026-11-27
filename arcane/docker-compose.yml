@@ -31,7 +31,7 @@ services:
       - ARCANE_PROJECTS_DIRECTORY=${ARCANE_PROJECTS_DIRECTORY:-/opt/docker}
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
-      - TZ=${TZ:-UTC}
+      - TZ=${TZ:-Asia/Tehran}
       # Optional: first-run admin credentials. Only read on an empty database.
       # - ARCANE_DEFAULT_ADMIN_USERNAME=arcane
       # - ARCANE_DEFAULT_ADMIN_PASSWORD=
@@ -68,7 +68,7 @@ services:
       - "traefik.http.routers.arcane-web.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
       - "traefik.http.routers.arcane-web.priority=10"
       - "traefik.http.routers.arcane-web.tls=true"
-      - "traefik.http.routers.arcane-web.tls.certresolver=${TRAEFIK_CERTRESOLVER:-myresolver}"
+      - "traefik.http.routers.arcane-web.tls.certresolver=${TRAEFIK_CERTRESOLVER:-cloudflare_resolver}"
       - "traefik.http.routers.arcane-web.service=arcane-web"
       - "traefik.http.routers.arcane-web.middlewares=${ARCANE_MIDDLEWARES:-arcane-compress,arcane-headers}"
       - "traefik.http.services.arcane-web.loadbalancer.server.port=3552"
@@ -82,7 +82,7 @@ services:
       - "traefik.http.routers.arcane-grpc.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
       - "traefik.http.routers.arcane-grpc.priority=100"
       - "traefik.http.routers.arcane-grpc.tls=true"
-      - "traefik.http.routers.arcane-grpc.tls.certresolver=${TRAEFIK_CERTRESOLVER:-myresolver}"
+      - "traefik.http.routers.arcane-grpc.tls.certresolver=${TRAEFIK_CERTRESOLVER:-cloudflare_resolver}"
       - "traefik.http.routers.arcane-grpc.service=arcane-grpc"
       - "traefik.http.services.arcane-grpc.loadbalancer.server.port=3552"
       - "traefik.http.services.arcane-grpc.loadbalancer.server.scheme=h2c"

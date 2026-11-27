@@ -31,6 +31,9 @@ exists on the host as well.
 - Docker Engine and the Compose plugin.
 - The Traefik stack from `../traefik` running, sharing the `my_network` Docker
   network (created by that stack). Ports 80/443 must be reachable.
+- A Cloudflare API token in `../traefik/.env` (`CF_DNS_API_TOKEN`), because the
+  default resolver is `cloudflare_resolver`. Run `make setup-cloudflare` in
+  `../traefik` or set `TRAEFIK_CERTRESOLVER=myresolver` to use HTTP-01 instead.
 - DNS for the Arcane hostname pointing at the Docker host.
 
 ## Quick start
@@ -52,8 +55,24 @@ make setup-proxies      # detects the Docker network CIDR for ARCANE_TRUSTED_PRO
 make deploy
 ```
 
-The Makefile uses `docker` by default. If your user is not in the `docker`
-group, pass `SUDO=sudo`, e.g. `make deploy SUDO=sudo`.
+The Makefile handles privilege escalation automatically:
+
+- Docker commands use `sudo` when the current user is not in the `docker` group.
+- Bind-mount paths under `/srv` that the user cannot create or read are retried
+  with `sudo` (creation, ownership, backups and cleanup).
+- Force sudo for everything with `make <target> SUDO=sudo`.
+
+For a `/srv` deployment, point the paths in `.env` at absolute directories:
+
+```dotenv
+ARCANE_DATA_DIR=/srv/arcane/data
+ARCANE_PROJECTS_DIR=/srv/arcane/projects
+ARCANE_BUILDS_DIR=/srv/arcane/builds
+ARCANE_BACKUPS_DIR=/srv/arcane/backups
+```
+
+`make deploy` creates them and aligns their owner with `PUID:PGID`; use
+`make fix-ownership` to recursively fix existing contents after a migration.
 
 ## First sign-in
 
@@ -82,10 +101,10 @@ removed after the first password change.
 | `ARCANE_ENCRYPTION_KEY` | — | Required; `make setup-secret` generates it |
 | `ARCANE_TRUSTED_PROXIES` | `172.18.0.0/16` | CIDR of the Traefik network; `make setup-proxies` sets it |
 | `DOCKER_NETWORK` | `my_network` | Must match Traefik's network |
-| `TRAEFIK_CERTRESOLVER` | `myresolver` | Or `cloudflare_resolver` for DNS-01/wildcards |
+| `TRAEFIK_CERTRESOLVER` | `cloudflare_resolver` | DNS-01 (wildcards); needs `CF_DNS_API_TOKEN` in `../traefik/.env`. Use `myresolver` for HTTP-01 |
 | `ARCANE_MIDDLEWARES` | `arcane-compress,arcane-headers` | Prepend `crowdsec-bouncer` when CrowdSec is enabled |
 | `PUID` / `PGID` | `1000` / `1000` | Host owner for files Arcane creates |
-| `TZ` | `UTC` | IANA timezone used by scheduled jobs |
+| `TZ` | `Asia/Tehran` | IANA timezone used by scheduled jobs |
 
 `ARCANE_TRUSTED_PROXIES` is required for correct login rate limiting: without it,
 Arcane sees every request as coming from Traefik and rate-limits by the proxy IP.
@@ -188,6 +207,7 @@ proxy rejects the tunnel. Use `optional` while rolling out, and persist
 | `make setup-secret` | Generate or rotate `ARCANE_ENCRYPTION_KEY` |
 | `make setup-domain` | Set domain, app URL and TLS resolver |
 | `make setup-proxies` | Detect and set `ARCANE_TRUSTED_PROXIES` |
+| `make fix-ownership` | Recursively chown bind mounts to `PUID:PGID` (escalates if needed) |
 | `make deploy` | Create bind-mount dirs, start the stack, wait for healthy |
 | `make down` | Stop and remove the container; data is kept |
 | `make restart` | Recreate the container to apply `.env` changes |
