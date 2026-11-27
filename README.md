@@ -166,6 +166,20 @@ cd makefiles
 make docker
 ```
 
+`make docker` sets up **rootless** Docker: the daemon runs as your user, so you are not added to the root-equivalent `docker` group. Rootful Docker is still available as `make docker_rootful` for the Kubernetes targets.
+
+### Hardening a Fresh VPS
+
+Before installing anything else, apply the security baseline (key-only SSH, UFW default-deny, fail2ban, unattended upgrades, kernel sysctls):
+
+```bash
+cd makefiles
+make harden                # SSH on port 22
+make harden SSH_PORT=2222  # if SSH is already on a custom port
+```
+
+Keep your current SSH session open and verify a new login before closing it. Then run `make setup`. `setup` includes fail2ban (SSH jail plus a recidive jail) and no longer installs Webmin. Install Webmin explicitly with `make webmin`; it binds to `127.0.0.1`, so it is reachable only through an SSH tunnel.
+
 ### Running a Stack
 
 Navigate to the desired stack directory, configure the `.env` file (if provided), and launch the container stack:
